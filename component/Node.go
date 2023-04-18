@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -28,10 +29,11 @@ const (
 	NodeRequestSlaveStatus        = 0x00020001
 	NodeRequestSlaveNotify        = 0x00020011
 
-	NodeRequestMethodStatus          = http.MethodGet
-	NodeRequestMethodMasterStatus    = http.MethodGet
-	NodeRequestMethodMasterNotifyAdd = http.MethodPut
-	NodeRequestMethodSlaveStatus     = http.MethodGet
+	NodeRequestMethodStatus             = http.MethodGet
+	NodeRequestMethodMasterStatus       = http.MethodGet
+	NodeRequestMethodMasterNotifyAdd    = http.MethodPut
+	NodeRequestMethodMasterNotifyDelete = http.MethodDelete
+	NodeRequestMethodSlaveStatus        = http.MethodGet
 
 	NodeRequestURLFormatStatus             = "http://%s/server"
 	NodeRequestURLFormatMasterStatus       = "http://%s/server/master"
@@ -46,10 +48,11 @@ const (
 )
 
 type NodePool struct {
-	Identity uint8
-	Master   *models.NodeInfo
-	Self     *models.NodeInfo
-	Nodes    map[uint64]models.NodeInfo
+	Identity      uint8
+	Master        *models.NodeInfo
+	Self          *models.NodeInfo
+	SlavesRWMutex sync.RWMutex
+	Slaves        map[uint64]models.NodeInfo
 }
 
 var Nodes *NodePool
@@ -128,7 +131,7 @@ func NewNodePool(self *models.NodeInfo) *NodePool {
 		Identity: NodeIdentityNotDetermined,
 		Master:   &models.NodeInfo{},
 		Self:     self,
-		Nodes:    make(map[uint64]models.NodeInfo),
+		Slaves:   make(map[uint64]models.NodeInfo),
 	}
 	nodes.RefreshSelfSocket()
 	return &nodes
@@ -198,10 +201,46 @@ func (n *NodePool) AcceptMaster(node *models.NodeInfo) {
 }
 
 func (n *NodePool) AcceptSlave(node *models.NodeInfo) (bool, error) {
-	return n.Self.AddSlaveNode(node)
+	n.SlavesRWMutex.Lock()
+	defer n.SlavesRWMutex.Unlock()
+	_, err := n.Self.AddSlaveNode(node)
+	if err != nil {
+		return false, nil
+	}
+	n.Slaves[node.ID] = *node
+	return true, nil
 }
 
-func (n *NodePool) NotifyMasterToAddSlave() (bool, error) {
+var ErrNodeSlaveSocketInvalid = errors.New("invalid slave socket")
+
+func (n *NodePool) RemoveSlave(id uint64, host string, port uint16) (bool, error) {
+	n.SlavesRWMutex.Lock()
+	defer n.SlavesRWMutex.Unlock()
+	slave, err := n.CheckSlave(id, host, port)
+	if err != nil {
+		return false, err
+	}
+	if _, err := n.Self.RemoveSlaveNode(slave); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (n *NodePool) CheckSlave(id uint64, host string, port uint16) (*models.NodeInfo, error) {
+	// 检查指定ID是否存在，如果不是，则报错。
+	slave, exist := n.Slaves[id]
+	if !exist {
+		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
+	}
+	// 再检查 Socket 是否相同。
+	if slave.Host == host && slave.Port == port {
+		return &slave, nil
+	}
+	return nil, ErrNodeSlaveSocketInvalid
+}
+
+// NotifyMasterToAddSelfAsSlave 当前节点（从节点）通知主节点添加自己为其从节点。
+func (n *NodePool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 	resp, err := n.SendRequestMasterToAddSelfAsSlave()
 	if err != nil {
 		return false, err
@@ -217,6 +256,28 @@ func (n *NodePool) NotifyMasterToAddSlave() (bool, error) {
 	return true, nil
 }
 
+// NotifyMasterToRemoveSelf 当前节点（从节点）通知主节点删除自己。
+func (n *NodePool) NotifyMasterToRemoveSelf() (bool, error) {
+	resp, err := n.SendRequestMasterToRemoveSelf()
+	if err != nil {
+		return false, err
+	}
+	var body = make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
+	if err != io.EOF && err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New(string(body))
+	}
+	return true, nil
+}
+
+func (n *NodePool) CheckSlavesStatus() {
+	n.SlavesRWMutex.Lock()
+	defer n.SlavesRWMutex.Unlock()
+}
+
 func (n *NodePool) RefreshSlaveNodes() {
 	nodes, err := n.Self.GetAllSlaveNodes()
 	if err != nil {
@@ -228,7 +289,7 @@ func (n *NodePool) RefreshSlaveNodes() {
 			result[node.ID] = node
 		}
 	}
-	n.Nodes = result
+	n.Slaves = result
 }
 
 func (n *NodePool) NodeSelectMaster(node *models.NodeInfo) {
@@ -279,17 +340,27 @@ type FreshNodeInfo struct {
 	Port        uint16 `json:"port"`
 }
 
+func (n *FreshNodeInfo) Encode() string {
+	params := make(url.Values)
+	params.Add("name", n.Name)
+	params.Add("node_version", n.NodeVersion)
+	params.Add("host", n.Host)
+	params.Add("port", strconv.Itoa(int(n.Port)))
+	return params.Encode()
+}
+
 func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
 	URL := fmt.Sprintf(NodeRequestURLFormatMasterNotifyAdd, n.Master.Socket())
-	params := make(url.Values)
-	params.Add("name", n.Self.Name)
-	params.Add("node_version", n.Self.NodeVersion)
-	params.Add("host", n.Self.Host)
-	params.Add("port", strconv.Itoa(int(n.Self.Port)))
-	var body = strings.NewReader(params.Encode())
+	self := FreshNodeInfo{
+		Host:        n.Self.Host,
+		Port:        n.Self.Port,
+		Name:        n.Self.Name,
+		NodeVersion: n.Self.NodeVersion,
+	}
+	var body = strings.NewReader(self.Encode())
 	req, err := http.NewRequest(NodeRequestMethodMasterNotifyAdd, URL, body)
 	if err != nil {
 		return nil, err
@@ -303,6 +374,43 @@ func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 
 func (n *NodePool) CheckResponseMasterNotifyAdd(response *http.Response, err error) {
 
+}
+
+func (n *NodePool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
+	if n.Master == nil {
+		return nil, models.ErrNodeLevelAlreadyHighest
+	}
+	URL := fmt.Sprintf(NodeRequestURLFormatMasterNotifyDelete, n.Master.Socket())
+	req, err := http.NewRequest(NodeRequestMethodMasterNotifyDelete, URL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
+	client := &http.Client{Timeout: time.Second}
+	resp, err := client.Do(req)
+	return resp, err
+}
+
+func (n *NodePool) CheckResponseMasterNotifyDelete(response *http.Response, err error) {
+
+}
+
+var ErrNodeMasterDoesNotHaveSpecifiedSlave = errors.New("the specified slave node does not exist on the current master node")
+
+func (n *NodePool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
+	slave, exist := n.Slaves[id]
+	if !exist {
+		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
+	}
+	URL := fmt.Sprintf(NodeRequestURLFormatSlaveStatus, slave.Socket())
+	req, err := http.NewRequest(NodeRequestMethodSlaveStatus, URL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
+	client := &http.Client{Timeout: time.Second}
+	resp, err := client.Do(req)
+	return resp, err
 }
 
 func (n *NodePool) SendRequest() {

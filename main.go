@@ -48,7 +48,7 @@ func main() {
 			// Regard `masterNode` as my master:
 			component.Nodes.AcceptMaster(masterNode)
 			// Notify master to add this node as its slave:
-			_, err := component.Nodes.NotifyMasterToAddSlave()
+			_, err := component.Nodes.NotifyMasterToAddSelfAsSlave()
 			if err != nil {
 				log.Fatalln(err)
 			}

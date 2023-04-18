@@ -110,21 +110,23 @@ func (m *NodeInfo) GetAllActiveSlaveNodes() (*[]NodeInfo, error) {
 	return &results, nil
 }
 
+// AddSlaveNode 添加从节点信息到数据库。
+// 从节点的上级节点为当前节点。
+// 从节点的 Level 为当前节点 + 1。
+// 从节点的 Order 为当前所有节点最大 Order + 1。如果没有从节点，则默认为 1。
 func (m *NodeInfo) AddSlaveNode(node *NodeInfo) (bool, error) {
 	node.SuperiorID = m.ID
 	node.Level = m.Level + 1
 	node.Order = 0
-	tx := NodeInfoDB.Create(node)
-	if tx.Error != nil {
+	if tx := NodeInfoDB.Create(node); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
 }
 
 func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
-	tx := NodeInfoDB.Create(m)
-	if tx.Error != nil {
-		return false, nil
+	if tx := NodeInfoDB.Create(m); tx.Error != nil {
+		return false, tx.Error
 	}
 	return true, nil
 }
@@ -136,12 +138,26 @@ func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
 	m.Level = master.Level
 	m.Order = master.Order
 	m.IsActive = FieldIsActiveActive
-	tx := NodeInfoDB.Model(m).Where("id = ?", master.ID).Updates(map[string]interface{}{
+	condition := map[string]interface{}{
+		"id":      master.ID,
+		"version": m.Version,
+	}
+	if tx := NodeInfoDB.Model(m).Where(condition).Updates(map[string]interface{}{
 		"level":     m.Level,
 		"order":     m.Order,
 		"is_active": m.IsActive,
-	})
-	if tx.Error != nil {
+	}); tx.Error != nil {
+		return false, tx.Error
+	}
+	return true, nil
+}
+
+func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
+	condition := map[string]interface{}{
+		"id":      slave.ID,
+		"version": m.Version,
+	}
+	if tx := NodeInfoDB.Model(m).Where(condition).Update("is_delete", FieldIsDeleteTrue); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
