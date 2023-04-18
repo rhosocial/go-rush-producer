@@ -3,9 +3,13 @@ package component
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -24,9 +28,10 @@ const (
 	NodeRequestSlaveStatus        = 0x00020001
 	NodeRequestSlaveNotify        = 0x00020011
 
-	NodeRequestMethodStatus       = http.MethodGet
-	NodeRequestMethodMasterStatus = http.MethodGet
-	NodeRequestMethodSlaveStatus  = http.MethodGet
+	NodeRequestMethodStatus          = http.MethodGet
+	NodeRequestMethodMasterStatus    = http.MethodGet
+	NodeRequestMethodMasterNotifyAdd = http.MethodPut
+	NodeRequestMethodSlaveStatus     = http.MethodGet
 
 	NodeRequestURLFormatStatus             = "http://%s/server"
 	NodeRequestURLFormatMasterStatus       = "http://%s/server/master"
@@ -192,7 +197,24 @@ func (n *NodePool) AcceptMaster(node *models.NodeInfo) {
 	n.Identity = n.Identity | NodeIdentitySlave
 }
 
-func (n *NodePool) NotifyMasterToAddSlave() {
+func (n *NodePool) AcceptSlave(node *models.NodeInfo) (bool, error) {
+	return n.Self.AddSlaveNode(node)
+}
+
+func (n *NodePool) NotifyMasterToAddSlave() (bool, error) {
+	resp, err := n.SendRequestMasterToAddSelfAsSlave()
+	if err != nil {
+		return false, err
+	}
+	var body = make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
+	if err != io.EOF && err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New(string(body))
+	}
+	return true, nil
 }
 
 func (n *NodePool) RefreshSlaveNodes() {
@@ -235,8 +257,8 @@ func (n *NodePool) SendRequestMasterStatus() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	url := fmt.Sprintf(NodeRequestURLFormatMasterStatus, n.Master.Socket())
-	req, err := http.NewRequest(NodeRequestMethodMasterStatus, url, nil)
+	URL := fmt.Sprintf(NodeRequestURLFormatMasterStatus, n.Master.Socket())
+	req, err := http.NewRequest(NodeRequestMethodMasterStatus, URL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +269,39 @@ func (n *NodePool) SendRequestMasterStatus() (*http.Response, error) {
 }
 
 func (n *NodePool) CheckResponseMasterStatus(response *http.Response, err error) {
+
+}
+
+type FreshNodeInfo struct {
+	Name        string `json:"name"`
+	NodeVersion string `json:"node_version"`
+	Host        string `json:"string"`
+	Port        uint16 `json:"port"`
+}
+
+func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
+	if n.Master == nil {
+		return nil, models.ErrNodeLevelAlreadyHighest
+	}
+	URL := fmt.Sprintf(NodeRequestURLFormatMasterNotifyAdd, n.Master.Socket())
+	params := make(url.Values)
+	params.Add("name", n.Self.Name)
+	params.Add("node_version", n.Self.NodeVersion)
+	params.Add("host", n.Self.Host)
+	params.Add("port", strconv.Itoa(int(n.Self.Port)))
+	var body = strings.NewReader(params.Encode())
+	req, err := http.NewRequest(NodeRequestMethodMasterNotifyAdd, URL, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	client := &http.Client{Timeout: time.Second}
+	resp, err := client.Do(req)
+	return resp, err
+}
+
+func (n *NodePool) CheckResponseMasterNotifyAdd(response *http.Response, err error) {
 
 }
 
