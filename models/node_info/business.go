@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+
 	"gorm.io/gorm"
 )
 
@@ -22,7 +23,6 @@ var ErrNodeNumberOfMasterNodeExceedsLowerLimit = errors.New("the number of activ
 func (m *NodeInfo) GetPeerActiveNodes() (*[]NodeInfo, error) {
 	var nodes []NodeInfo
 	var condition = map[string]interface{}{
-		"is_delete": FieldIsDeleteFalse,
 		"is_active": FieldIsActiveActive,
 		"level":     m.Level,
 	}
@@ -66,7 +66,6 @@ func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 	}
 	var node NodeInfo
 	var condition = map[string]interface{}{
-		"is_delete": FieldIsDeleteFalse,
 		"is_active": FieldIsActiveActive,
 		"level":     m.Level - 1,
 	}
@@ -84,7 +83,6 @@ func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 	var slaveNodes []NodeInfo
 	var conditionActiveSlave = map[string]interface{}{
-		"is_delete":   FieldIsDeleteFalse,
 		"Level":       m.Level + 1,
 		"superior_id": m.ID,
 	}
@@ -96,12 +94,8 @@ func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 }
 
 func GetNodeInfo(id uint64) (*NodeInfo, error) {
-	condition := map[string]interface{}{
-		"id":        id,
-		"is_delete": FieldIsDeleteFalse,
-	}
 	var record NodeInfo
-	if tx := NodeInfoDB.Model(&NodeInfo{}).Where(condition).Take(&record); tx.Error != nil {
+	if tx := NodeInfoDB.Take(&record, id); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &record, nil
@@ -164,12 +158,15 @@ func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
 	return true, nil
 }
 
+// ErrModelInvalid 表示删除出错。
+// TODO: 此为暂定名。
+var ErrModelInvalid = errors.New("slave not invalid")
+
 func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
-	condition := map[string]interface{}{
-		"id":      slave.ID,
-		"version": m.Version,
+	if slave.Level != m.Level+1 || slave.SuperiorID != m.ID {
+		return false, ErrModelInvalid
 	}
-	if tx := NodeInfoDB.Model(m).Where(condition).Update("is_delete", FieldIsDeleteTrue); tx.Error != nil {
+	if tx := NodeInfoDB.Delete(&NodeInfo{}, slave.ID); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil

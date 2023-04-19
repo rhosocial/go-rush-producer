@@ -122,7 +122,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 	}
 	if _, err := component.Nodes.RemoveSlave(slaveID, &fresh); err != nil {
 		r.Error(err)
-		r.AbortWithStatusJSON(http.StatusForbidden, commonComponent.NewGenericResponse(r, 1, "failed to remove slave", err.Error(), nil))
+		r.AbortWithStatusJSON(http.StatusInternalServerError, commonComponent.NewGenericResponse(r, 1, "failed to remove slave", err.Error(), nil))
 		return
 	}
 	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", nil, nil))

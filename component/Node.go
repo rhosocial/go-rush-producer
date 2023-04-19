@@ -170,7 +170,13 @@ func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
 	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
 }
 
-// CheckSlave 检查从节点是否有效。
+var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info")
+
+// CheckSlave 检查从节点是否有效。检查通过则返回节点信息 models.NodeInfo。
+//
+// 1. 若节点不存在，则报 ErrNodeMasterDoesNotHaveSpecifiedSlave。
+//
+// 2. 检查 FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
 func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
 	slave, exist := n.Slaves[id]
@@ -187,7 +193,7 @@ func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo
 	if origin.IsEqual(fresh) {
 		return &slave, nil
 	}
-	return nil, ErrNodeSlaveSocketInvalid
+	return nil, ErrNodeSlaveFreshNodeInfoInvalid
 }
 
 // DiscoverMasterNode 发现主节点。返回发现的节点信息指针。
@@ -316,9 +322,13 @@ func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (*models.NodeInfo, error) {
 	return &slave, nil
 }
 
-var ErrNodeSlaveSocketInvalid = errors.New("invalid slave socket")
-
+// RemoveSlave 删除指定节点。删除前要校验客户端提供的信息。若未报错，则视为删除成功。
+//
+// 1. 检查节点是否有效。检查流程参见 CheckSlave。
+//
+// 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
 func (n *NodePool) RemoveSlave(id uint64, fresh *FreshNodeInfo) (bool, error) {
+	log.Printf("Remove Slave: %d\n", id)
 	n.SlavesRWMutex.Lock()
 	defer n.SlavesRWMutex.Unlock()
 	slave, err := n.CheckSlave(id, fresh)
