@@ -56,7 +56,8 @@ func main() {
 			// I am already a master node.
 			// Switch identity to master.
 			component.Nodes.Self = masterNode
-			component.Nodes.SwitchIdentityToMaster()
+			component.Nodes.Master = component.Nodes.Self
+			component.Nodes.SwitchIdentityMasterOn()
 		} else if err == component.ErrNodeMasterExisted {
 			// A valid master node with the same socket already exists. Exiting.
 			log.Fatalln(err)

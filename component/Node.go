@@ -20,6 +20,7 @@ const (
 	NodeIdentityNotDetermined = 0
 	NodeIdentityMaster        = 1
 	NodeIdentitySlave         = 2
+	NodeIdentityAll           = NodeIdentityMaster | NodeIdentitySlave
 
 	NodeRequestStatus             = 0x00000001
 	NodeRequestMasterStatus       = 0x00010001
@@ -137,6 +138,41 @@ func NewNodePool(self *models.NodeInfo) *NodePool {
 	return &nodes
 }
 
+// FreshNodeInfo 新节点信息。
+type FreshNodeInfo struct {
+	Name        string `form:"name" json:"name" binding:"required"`
+	NodeVersion string `form:"node_version" json:"node_version" binding:"required"`
+	Host        string `form:"host" json:"string" binding:"required"`
+	Port        uint16 `form:"port" json:"port" binding:"required"`
+}
+
+func (n *FreshNodeInfo) Encode() string {
+	params := make(url.Values)
+	params.Add("name", n.Name)
+	params.Add("node_version", n.NodeVersion)
+	params.Add("host", n.Host)
+	params.Add("port", strconv.Itoa(int(n.Port)))
+	return params.Encode()
+}
+
+// CheckSlave 检查从节点是否有效。
+func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo, error) {
+	// 检查指定ID是否存在，如果不是，则报错。
+	slave, exist := n.Slaves[id]
+	if !exist {
+		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
+	}
+	// 再检查 FreshNodeInfo 是否相同。
+	if slave.Name == fresh.Name && slave.NodeVersion == fresh.NodeVersion && slave.Host == fresh.Host && slave.Port == fresh.Port {
+		return &slave, nil
+	}
+	return nil, ErrNodeSlaveSocketInvalid
+}
+
+// DiscoverMasterNode 发现主节点。返回发现的节点信息指针。
+// 调用前，NodePool.Self 必须已经设置 models.NodeInfo 的 Level 值。上级即为 NodePool.Self.Level - 1，且不指定具体上级 ID。
+// 如果 Level 已经为 0，则没有更高级，报 models.ErrNodeLevelAlreadyHighest。
+// 如果查找不到最高级，则报 models.ErrNodeSuperiorNotExist。
 func (n *NodePool) DiscoverMasterNode() (*models.NodeInfo, error) {
 	node, err := n.Self.GetSuperiorNode(false)
 	if err != nil {
@@ -145,9 +181,20 @@ func (n *NodePool) DiscoverMasterNode() (*models.NodeInfo, error) {
 	return node, nil
 }
 
-func (n *NodePool) SwitchIdentityToMaster() {
-	n.Master = n.Self
+func (n *NodePool) SwitchIdentityMasterOn() {
 	n.Identity = n.Identity | NodeIdentityMaster
+}
+
+func (n *NodePool) SwitchIdentityMasterOff() {
+	n.Identity = n.Identity &^ NodeIdentityMaster
+}
+
+func (n *NodePool) SwitchIdentitySlaveOn() {
+	n.Identity = n.Identity | NodeIdentitySlave
+}
+
+func (n *NodePool) SwitchIdentitySlaveOff() {
+	n.Identity = n.Identity &^ NodeIdentitySlave
 }
 
 func (n *NodePool) CommitSelfAsMasterNode() (bool, error) {
@@ -166,14 +213,26 @@ var ErrNodeMasterValidButRefused = errors.New("master is valid but refuse to com
 var ErrNodeMasterIsSelf = errors.New("master node is self")
 var ErrNodeMasterExisted = errors.New("a valid master node with the same socket already exists")
 
+// CheckMaster 检查主节点有效性。如果有效，则返回 nil。
+// 如果指定主节点不存在，则报 ErrNodeMasterInvalid。
+//
+// 尝试连接主节点。判断 master 的套接字是否与自己相同。
+//
+// 1. 如果相同，则认为是自己。
+// 如果连接未报错，则表明已经存在对应节点，报 ErrNodeMasterExisted；
+// 如果连接报错，则将 master 作为异常失效信息，报 ErrNodeMasterIsSelf。
+//
+// 2. 如果不同，则认为主节点是另一个进程。
+// 如果连接报错，则报 ErrNodeMasterInvalid。
+// 如果连接返回状态码不是 http.StatusOK，则同样视为报错。
 func (n *NodePool) CheckMaster(master *models.NodeInfo) error {
 	if master == nil {
 		return ErrNodeMasterInvalid
 	}
+	resp, err := n.SendRequestMasterStatus()
 	if n.Self.IsSocketEqual(master) {
 		// 如果与主节点 Socket 一致，那自己就是 Master。
 		// 但此时仍要检查对应 Socket 是否依然有效。
-		_, err := n.SendRequestMasterStatus()
 		// 如果连接未报错，则认为主节点已存在。
 		if err == nil {
 			return ErrNodeMasterExisted
@@ -181,7 +240,6 @@ func (n *NodePool) CheckMaster(master *models.NodeInfo) error {
 		// 如果连接报错，则将本节点视为 Master。
 		return ErrNodeMasterIsSelf
 	}
-	resp, err := n.SendRequestMasterStatus()
 	if err != nil {
 		return ErrNodeMasterInvalid
 	}
@@ -197,7 +255,7 @@ func (n *NodePool) CheckMaster(master *models.NodeInfo) error {
 func (n *NodePool) AcceptMaster(node *models.NodeInfo) {
 	n.Master = node
 	n.Self.Level = n.Master.Level + 1
-	n.Identity = n.Identity | NodeIdentitySlave
+	n.SwitchIdentitySlaveOn()
 }
 
 func (n *NodePool) AcceptSlave(node *models.NodeInfo) (bool, error) {
@@ -213,30 +271,52 @@ func (n *NodePool) AcceptSlave(node *models.NodeInfo) (bool, error) {
 
 var ErrNodeSlaveSocketInvalid = errors.New("invalid slave socket")
 
-func (n *NodePool) RemoveSlave(id uint64, host string, port uint16) (bool, error) {
+func (n *NodePool) RemoveSlave(id uint64, fresh *FreshNodeInfo) (bool, error) {
 	n.SlavesRWMutex.Lock()
 	defer n.SlavesRWMutex.Unlock()
-	slave, err := n.CheckSlave(id, host, port)
+	slave, err := n.CheckSlave(id, fresh)
 	if err != nil {
 		return false, err
 	}
 	if _, err := n.Self.RemoveSlaveNode(slave); err != nil {
 		return false, err
 	}
+	delete(n.Slaves, id)
 	return true, nil
 }
 
-func (n *NodePool) CheckSlave(id uint64, host string, port uint16) (*models.NodeInfo, error) {
-	// 检查指定ID是否存在，如果不是，则报错。
-	slave, exist := n.Slaves[id]
-	if !exist {
-		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
+func (n *NodePool) RefreshSlavesStatus() ([]uint64, []uint64) {
+	remaining := make([]uint64, 0)
+	removed := make([]uint64, 0)
+	n.SlavesRWMutex.Lock()
+	defer n.SlavesRWMutex.Unlock()
+	for i, slave := range n.Slaves {
+		if _, err := n.GetSlaveStatus(i); err != nil {
+			n.Self.RemoveSlaveNode(&slave)
+			delete(n.Slaves, i)
+			removed = append(removed, i)
+		} else {
+			remaining = append(remaining, i)
+		}
 	}
-	// 再检查 Socket 是否相同。
-	if slave.Host == host && slave.Port == port {
-		return &slave, nil
+	return remaining, removed
+}
+
+// GetSlaveStatus 当前节点（主节点）获取其从节点状态。
+func (n *NodePool) GetSlaveStatus(id uint64) (bool, error) {
+	resp, err := n.SendRequestSlaveStatus(id)
+	if err != nil {
+		return false, err
 	}
-	return nil, ErrNodeSlaveSocketInvalid
+	var body = make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
+	if err != io.EOF && err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New(string(body))
+	}
+	return true, nil
 }
 
 // NotifyMasterToAddSelfAsSlave 当前节点（从节点）通知主节点添加自己为其从节点。
@@ -292,24 +372,6 @@ func (n *NodePool) RefreshSlaveNodes() {
 	n.Slaves = result
 }
 
-func (n *NodePool) NodeSelectMaster(node *models.NodeInfo) {
-	if n.Identity == NodeIdentityNotDetermined {
-
-	}
-	masterNodes, err := node.GetPeerActiveNodes()
-	if len(*masterNodes) > 0 {
-		if err == nil {
-			// 成功拿到主节点信息。将本节点设为其从节点。
-			n.Identity = NodeIdentitySlave
-		} else if err == models.ErrNodeNumberOfMasterNodeExceedsLowerLimit {
-			// 缺主节点。选自己为主。
-
-		} else if err == models.ErrNodeNumberOfMasterNodeExceedsUpperLimit {
-			// 主节点过多。等待多余主节点自己退出。稍后再试。
-		}
-	}
-}
-
 // SendRequestMasterStatus 向"主节点-状态"发送请求。
 // 如果已经是最高级，则报 models.ErrNodeLevelAlreadyHighest。
 // 如果构建请求出错，则据实返回，此时第一个返回值为空。
@@ -331,22 +393,6 @@ func (n *NodePool) SendRequestMasterStatus() (*http.Response, error) {
 
 func (n *NodePool) CheckResponseMasterStatus(response *http.Response, err error) {
 
-}
-
-type FreshNodeInfo struct {
-	Name        string `json:"name"`
-	NodeVersion string `json:"node_version"`
-	Host        string `json:"string"`
-	Port        uint16 `json:"port"`
-}
-
-func (n *FreshNodeInfo) Encode() string {
-	params := make(url.Values)
-	params.Add("name", n.Name)
-	params.Add("node_version", n.NodeVersion)
-	params.Add("host", n.Host)
-	params.Add("port", strconv.Itoa(int(n.Port)))
-	return params.Encode()
 }
 
 func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
@@ -397,6 +443,7 @@ func (n *NodePool) CheckResponseMasterNotifyDelete(response *http.Response, err 
 
 var ErrNodeMasterDoesNotHaveSpecifiedSlave = errors.New("the specified slave node does not exist on the current master node")
 
+// SendRequestSlaveStatus 发送请求：获取指定ID从节点状态。
 func (n *NodePool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	slave, exist := n.Slaves[id]
 	if !exist {

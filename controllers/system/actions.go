@@ -43,15 +43,17 @@ func (c *ControllerServer) ActionStatus(r *gin.Context) {
 	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", nil, nil))
 }
 
-type ResponseDataSlaveGetMasterStatus struct {
+type ActionSlaveGetMasterStatusResponseData struct {
 	Host       string `json:"host"`
 	ClientIP   string `json:"client_ip"`
 	RemoteAddr string `json:"remote_addr"`
 }
 
+// ActionSlaveGetMasterStatus 从节点发起获取主节点（自己）状态的请求。
+// 应当返回请求节点的 r.Request.Host、r.ClientIP() 和 r.Request.RemoteAddr 供远程节点校验。
 func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(
-		r, 0, "success", ResponseDataSlaveGetMasterStatus{
+		r, 0, "success", ActionSlaveGetMasterStatusResponseData{
 			Host:       r.Request.Host,
 			ClientIP:   r.ClientIP(),
 			RemoteAddr: r.Request.RemoteAddr,
@@ -60,6 +62,8 @@ func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 }
 
 // ActionSlaveNotifyMasterAddSelf 从节点通知主节点（自己）添加其为从节点。
+// 从节点应当发来 component.FreshNodeInfo 信息。
+// TODO: 校验从节点发来的 component.FreshNodeInfo 信息。
 func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 	port, err := strconv.ParseUint(r.PostForm("port"), 10, 16)
 	if err != nil {
@@ -78,7 +82,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 }
 
 // ActionSlaveNotifyMasterModifySelf 从节点通知主节点（自己）修改自身信息。
-// 可以修改的项包括
+// TODO:可以修改的项待定。
 func (c *ControllerServer) ActionSlaveNotifyMasterModifySelf(r *gin.Context) {
 	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", nil, nil))
 }
@@ -97,17 +101,31 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 		r.AbortWithStatusJSON(http.StatusBadRequest, commonComponent.NewGenericResponse(r, 1, err.Error(), nil, nil))
 		return
 	}
-	if _, err := component.Nodes.RemoveSlave(slaveID, r.ClientIP(), uint16(port)); err != nil {
+	fresh := component.FreshNodeInfo{
+		Host:        r.ClientIP(),
+		Port:        uint16(port),
+		Name:        r.Param("name"),
+		NodeVersion: r.Param("node_version"),
+	}
+	if _, err := component.Nodes.RemoveSlave(slaveID, &fresh); err != nil {
 		r.AbortWithStatusJSON(http.StatusForbidden, commonComponent.NewGenericResponse(r, 1, err.Error(), nil, nil))
 		return
 	}
 	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", nil, nil))
 }
 
-func (c *ControllerServer) ActionMasterGetSlaveStatus(r *gin.Context) {
-	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", nil, nil))
+type ActionMasterGetSlaveStatusResponseData struct {
+	Remaining []uint64 `json:"remaining"`
+	Removed   []uint64 `json:"removed"`
 }
 
+// ActionMasterGetSlaveStatus 当前节点（从节点）收到主节点获取本节点（从节点）状态请求。（仅对等网络有效）
+func (c *ControllerServer) ActionMasterGetSlaveStatus(r *gin.Context) {
+	remaining, removed := component.Nodes.RefreshSlavesStatus()
+	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", ActionMasterGetSlaveStatusResponseData{remaining, removed}, nil))
+}
+
+// ActionMasterNotifySlave 当前节点（主节点）通知从节点。（通知内容待定，仅对等网络有效）
 func (c *ControllerServer) ActionMasterNotifySlave(r *gin.Context) {
 	r.JSON(http.StatusOK, commonComponent.NewGenericResponse(r, 0, "success", nil, nil))
 }
