@@ -61,6 +61,10 @@ func main() {
 		} else if err == component.ErrNodeMasterExisted {
 			// A valid master node with the same socket already exists. Exiting.
 			log.Fatalln(err)
+		} else if err == component.ErrNodeMasterInvalid {
+			log.Fatalln(err)
+		} else if err == component.ErrNodeRequestInvalid {
+			log.Fatalln(err)
 		}
 	}
 	// For-loop

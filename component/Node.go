@@ -216,7 +216,9 @@ var ErrNodeMasterExisted = errors.New("a valid master node with the same socket 
 // CheckMaster 检查主节点有效性。如果有效，则返回 nil。
 // 如果指定主节点不存在，则报 ErrNodeMasterInvalid。
 //
-// 尝试连接主节点。判断 master 的套接字是否与自己相同。
+// 尝试连接主节点。如果返回 ErrNodeRequestInvalid，则视为请求异常。
+//
+// 判断 master 的套接字是否与自己相同。
 //
 // 1. 如果相同，则认为是自己。
 // 如果连接未报错，则表明已经存在对应节点，报 ErrNodeMasterExisted；
@@ -230,18 +232,17 @@ func (n *NodePool) CheckMaster(master *models.NodeInfo) error {
 		return ErrNodeMasterInvalid
 	}
 	resp, err := n.SendRequestMasterStatus()
+	if err == ErrNodeRequestInvalid {
+		return err
+	}
 	if n.Self.IsSocketEqual(master) {
-		// 如果与主节点 Socket 一致，那自己就是 Master。
-		// 但此时仍要检查对应 Socket 是否依然有效。
-		// 如果连接未报错，则认为主节点已存在。
 		if err == nil {
 			return ErrNodeMasterExisted
 		}
-		// 如果连接报错，则将本节点视为 Master。
 		return ErrNodeMasterIsSelf
 	}
 	if err != nil {
-		return ErrNodeMasterInvalid
+		return err
 	}
 	if resp.StatusCode != http.StatusOK {
 		var body = make([]byte, resp.ContentLength)
@@ -380,12 +381,10 @@ func (n *NodePool) SendRequestMasterStatus() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	URL := fmt.Sprintf(NodeRequestURLFormatMasterStatus, n.Master.Socket())
-	req, err := http.NewRequest(NodeRequestMethodMasterStatus, URL, nil)
+	req, err := n.PrepareNodeRequest(NodeRequestMethodMasterStatus, NodeRequestURLFormatMasterStatus, n.Master.Socket(), nil, "")
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
 	client := &http.Client{Timeout: time.Second}
 	resp, err := client.Do(req)
 	return resp, err
@@ -399,7 +398,6 @@ func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	URL := fmt.Sprintf(NodeRequestURLFormatMasterNotifyAdd, n.Master.Socket())
 	self := FreshNodeInfo{
 		Host:        n.Self.Host,
 		Port:        n.Self.Port,
@@ -407,12 +405,10 @@ func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 		NodeVersion: n.Self.NodeVersion,
 	}
 	var body = strings.NewReader(self.Encode())
-	req, err := http.NewRequest(NodeRequestMethodMasterNotifyAdd, URL, body)
+	req, err := n.PrepareNodeRequest(NodeRequestMethodMasterNotifyAdd, NodeRequestURLFormatMasterNotifyAdd, n.Master.Socket(), body, "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	client := &http.Client{Timeout: time.Second}
 	resp, err := client.Do(req)
 	return resp, err
@@ -426,10 +422,9 @@ func (n *NodePool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	URL := fmt.Sprintf(NodeRequestURLFormatMasterNotifyDelete, n.Master.Socket())
-	req, err := http.NewRequest(NodeRequestMethodMasterNotifyDelete, URL, nil)
+	req, err := n.PrepareNodeRequest(NodeRequestMethodMasterNotifyDelete, NodeRequestURLFormatMasterNotifyDelete, n.Master.Socket(), nil, "")
 	if err != nil {
-		return nil, err
+		return nil, ErrNodeRequestInvalid
 	}
 	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
 	client := &http.Client{Timeout: time.Second}
@@ -442,6 +437,7 @@ func (n *NodePool) CheckResponseMasterNotifyDelete(response *http.Response, err 
 }
 
 var ErrNodeMasterDoesNotHaveSpecifiedSlave = errors.New("the specified slave node does not exist on the current master node")
+var ErrNodeRequestInvalid = errors.New("invalid node request")
 
 // SendRequestSlaveStatus 发送请求：获取指定ID从节点状态。
 func (n *NodePool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
@@ -449,17 +445,24 @@ func (n *NodePool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	if !exist {
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
-	URL := fmt.Sprintf(NodeRequestURLFormatSlaveStatus, slave.Socket())
-	req, err := http.NewRequest(NodeRequestMethodSlaveStatus, URL, nil)
+	req, err := n.PrepareNodeRequest(NodeRequestMethodSlaveStatus, NodeRequestURLFormatSlaveStatus, slave.Socket(), nil, "")
 	if err != nil {
-		return nil, err
+		return nil, ErrNodeRequestInvalid
 	}
-	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
 	client := &http.Client{Timeout: time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
 
-func (n *NodePool) SendRequest() {
-
+func (n *NodePool) PrepareNodeRequest(method string, urlFormat string, socket string, body io.Reader, contentType string) (*http.Request, error) {
+	URL := fmt.Sprintf(urlFormat, socket)
+	req, err := http.NewRequest(method, URL, body)
+	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
+	if len(contentType) > 0 {
+		req.Header.Add("Content-Type", contentType)
+	}
+	if err != nil {
+		log.Printf("[Prepare Request][method:%s][url%s][error:%s]\n", method, URL, err.Error())
+	}
+	return req, err
 }
