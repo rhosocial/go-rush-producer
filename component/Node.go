@@ -155,6 +155,10 @@ func (n *FreshNodeInfo) Encode() string {
 	return params.Encode()
 }
 
+func (n *FreshNodeInfo) Log() string {
+	return fmt.Sprintf("Fresh Node: %39s:%-5d | %s @ %s", n.Host, n.Port, n.Name, n.NodeVersion)
+}
+
 // CheckSlave 检查从节点是否有效。
 func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
@@ -259,14 +263,39 @@ func (n *NodePool) AcceptMaster(node *models.NodeInfo) {
 	n.SwitchIdentitySlaveOn()
 }
 
-func (n *NodePool) AcceptSlave(node *models.NodeInfo) (bool, error) {
+func (n *NodePool) CheckSlaveNodeIfExists(node *FreshNodeInfo) *models.NodeInfo {
+	for id, _ := range n.Slaves {
+		if slave, err := n.CheckSlave(id, node); err == nil {
+			return slave
+		}
+	}
+	return nil
+}
+
+func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (bool, error) {
+	log.Println(node.Log())
 	n.SlavesRWMutex.Lock()
 	defer n.SlavesRWMutex.Unlock()
-	_, err := n.Self.AddSlaveNode(node)
+	// 检查 n.Slaves 是否存在该节点。
+	// 如果存在，则直接返回。
+	n.RefreshSlavesNodeInfo()
+	if n.CheckSlaveNodeIfExists(node) != nil {
+		log.Println("The specified slave node record already exists.")
+		return true, nil
+	}
+	// 如果不存在，则加入该节点为从节点。
+	slave := models.NodeInfo{
+		Name:        node.Name,
+		NodeVersion: node.NodeVersion,
+		Host:        node.Host,
+		Port:        node.Port,
+	}
+	// 需要判断数据库中是否存在该条目。
+	_, err := n.Self.AddSlaveNode(&slave)
 	if err != nil {
 		return false, nil
 	}
-	n.Slaves[node.ID] = *node
+	n.Slaves[slave.ID] = slave
 	return true, nil
 }
 
@@ -359,7 +388,8 @@ func (n *NodePool) CheckSlavesStatus() {
 	defer n.SlavesRWMutex.Unlock()
 }
 
-func (n *NodePool) RefreshSlaveNodes() {
+// RefreshSlavesNodeInfo 刷新从节点信息。
+func (n *NodePool) RefreshSlavesNodeInfo() {
 	nodes, err := n.Self.GetAllSlaveNodes()
 	if err != nil {
 		return

@@ -46,7 +46,7 @@ func (m *NodeInfo) Socket() string {
 }
 
 func (m *NodeInfo) Log() string {
-	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%d | Superior: %10d | Level: %3d | Order: %3d\n",
+	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%-5d | Superior: %10d | Level: %3d | Order: %3d\n",
 		m.ID,
 		m.Host, m.Port,
 		m.SuperiorID, m.Level, m.Order,

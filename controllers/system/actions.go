@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	commonComponent "github.com/rhosocial/go-rush-common/component"
 	"github.com/rhosocial/go-rush-producer/component"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type ControllerServer struct {
@@ -71,7 +70,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 		return
 	}
 	host := r.PostForm("host")
-	slave := models.NodeInfo{
+	slave := component.FreshNodeInfo{
 		Name:        r.PostForm("name"),
 		NodeVersion: r.PostForm("node_version"),
 		Host:        r.ClientIP(),
