@@ -95,6 +95,18 @@ func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 	return &slaveNodes, nil
 }
 
+func GetNodeInfo(id uint64) (*NodeInfo, error) {
+	condition := map[string]interface{}{
+		"id":        id,
+		"is_delete": FieldIsDeleteFalse,
+	}
+	var record NodeInfo
+	if tx := NodeInfoDB.Model(&NodeInfo{}).Where(condition).Take(&record); tx.Error != nil {
+		return nil, tx.Error
+	}
+	return &record, nil
+}
+
 func (m *NodeInfo) GetAllActiveSlaveNodes() (*[]NodeInfo, error) {
 	nodes, err := m.GetAllSlaveNodes()
 	if err != nil {

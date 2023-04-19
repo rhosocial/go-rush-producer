@@ -1,6 +1,7 @@
 package component
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	commonComponent "github.com/rhosocial/go-rush-common/component"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
@@ -159,6 +161,15 @@ func (n *FreshNodeInfo) Log() string {
 	return fmt.Sprintf("Fresh Node: %39s:%-5d | %s @ %s", n.Host, n.Port, n.Name, n.NodeVersion)
 }
 
+func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
+	if n != nil && target == nil || n == nil && target != nil {
+		return false
+	}
+	log.Println("Origin: ", n.Log())
+	log.Println("Target: ", target.Log())
+	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
+}
+
 // CheckSlave 检查从节点是否有效。
 func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
@@ -167,7 +178,13 @@ func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
 	// 再检查 FreshNodeInfo 是否相同。
-	if slave.Name == fresh.Name && slave.NodeVersion == fresh.NodeVersion && slave.Host == fresh.Host && slave.Port == fresh.Port {
+	origin := FreshNodeInfo{
+		Name:        slave.Name,
+		NodeVersion: slave.NodeVersion,
+		Host:        slave.Host,
+		Port:        slave.Port,
+	}
+	if origin.IsEqual(fresh) {
 		return &slave, nil
 	}
 	return nil, ErrNodeSlaveSocketInvalid
@@ -272,16 +289,16 @@ func (n *NodePool) CheckSlaveNodeIfExists(node *FreshNodeInfo) *models.NodeInfo 
 	return nil
 }
 
-func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (bool, error) {
+func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (*models.NodeInfo, error) {
 	log.Println(node.Log())
 	n.SlavesRWMutex.Lock()
 	defer n.SlavesRWMutex.Unlock()
 	// 检查 n.Slaves 是否存在该节点。
 	// 如果存在，则直接返回。
 	n.RefreshSlavesNodeInfo()
-	if n.CheckSlaveNodeIfExists(node) != nil {
+	if slave := n.CheckSlaveNodeIfExists(node); slave != nil {
 		log.Println("The specified slave node record already exists.")
-		return true, nil
+		return slave, nil
 	}
 	// 如果不存在，则加入该节点为从节点。
 	slave := models.NodeInfo{
@@ -293,10 +310,10 @@ func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (bool, error) {
 	// 需要判断数据库中是否存在该条目。
 	_, err := n.Self.AddSlaveNode(&slave)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 	n.Slaves[slave.ID] = slave
-	return true, nil
+	return &slave, nil
 }
 
 var ErrNodeSlaveSocketInvalid = errors.New("invalid slave socket")
@@ -349,6 +366,20 @@ func (n *NodePool) GetSlaveStatus(id uint64) (bool, error) {
 	return true, nil
 }
 
+type NotifyMasterToAddSelfAsSlaveResponseData struct {
+	ID          uint64 `json:"id"`
+	Name        string `json:"name"`
+	NodeVersion string `json:"node_version"`
+	Host        string `json:"host"`
+	Port        uint16 `json:"port"`
+}
+
+type NotifyMasterToAddSelfAsSlaveResponse struct {
+	commonComponent.Response
+	Data      NotifyMasterToAddSelfAsSlaveResponseData `json:"data"`
+	Extension any                                      `json:"ext,omitempty"`
+}
+
 // NotifyMasterToAddSelfAsSlave 当前节点（从节点）通知主节点添加自己为其从节点。
 func (n *NodePool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 	resp, err := n.SendRequestMasterToAddSelfAsSlave()
@@ -363,6 +394,14 @@ func (n *NodePool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 	if resp.StatusCode != http.StatusOK {
 		return false, errors.New(string(body))
 	}
+	respData := NotifyMasterToAddSelfAsSlaveResponse{}
+	err = json.Unmarshal(body, &respData)
+	if err != nil {
+		return false, err
+	}
+	// 校验成功，将返回的ID作为自己的ID。
+	self, err := models.GetNodeInfo(respData.Data.ID)
+	n.Self = self
 	return true, nil
 }
 
@@ -370,7 +409,7 @@ func (n *NodePool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 func (n *NodePool) NotifyMasterToRemoveSelf() (bool, error) {
 	resp, err := n.SendRequestMasterToRemoveSelf()
 	if err != nil {
-		return false, err
+		return false, ErrNodeRequestInvalid
 	}
 	var body = make([]byte, resp.ContentLength)
 	_, err = resp.Body.Read(body)
@@ -415,7 +454,7 @@ func (n *NodePool) SendRequestMasterStatus() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -439,7 +478,7 @@ func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -452,12 +491,19 @@ func (n *NodePool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	req, err := n.PrepareNodeRequest(NodeRequestMethodMasterNotifyDelete, NodeRequestURLFormatMasterNotifyDelete, n.Master.Socket(), nil, "")
+	fresh := FreshNodeInfo{
+		Host:        n.Self.Host,
+		Port:        n.Self.Port,
+		Name:        n.Self.Name,
+		NodeVersion: n.Self.NodeVersion,
+	}
+	query := fmt.Sprintf("?id=%d&%s", n.Self.ID, fresh.Encode())
+	req, err := n.PrepareNodeRequest(NodeRequestMethodMasterNotifyDelete, NodeRequestURLFormatMasterNotifyDelete+query, n.Master.Socket(), nil, "")
 	if err != nil {
 		return nil, ErrNodeRequestInvalid
 	}
 	req.Header.Add(NodeRequestHeaderXAuthorizationTokenKey, NodeRequestHeaderXAuthorizationTokenValue)
-	client := &http.Client{Timeout: time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -479,7 +525,7 @@ func (n *NodePool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	if err != nil {
 		return nil, ErrNodeRequestInvalid
 	}
-	client := &http.Client{Timeout: time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -495,4 +541,22 @@ func (n *NodePool) PrepareNodeRequest(method string, urlFormat string, socket st
 		log.Printf("[Prepare Request][method:%s][url%s][error:%s]\n", method, URL, err.Error())
 	}
 	return req, err
+}
+
+// Stop 退出流程。
+//
+// 1. 若自己是 Master，则通知所有从节点停机或选择一个从节点并通知其接替自己。
+// 2. 若自己是 Slave，则通知主节点自己停机。
+// 3. 若身份未定，不做任何动作。
+func (n *NodePool) Stop() {
+	if n.IsIdentityNotDetermined() {
+		return
+	}
+	if n.IsIdentityMaster() {
+		// 通知所有从节点停机或选择一个从节点并通知其接替自己。
+	}
+	if n.IsIdentitySlave() {
+		// 通知主节点自己停机。
+		n.NotifyMasterToRemoveSelf()
+	}
 }

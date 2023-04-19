@@ -23,6 +23,7 @@ var dsn = "root:Python4096@tcp(1.n.rho.im:13406)/node_demo?charset=utf8mb4&parse
 
 func main() {
 	log.Println("Hello, World!")
+	SetupCloseHandler()
 	var err error
 	// 最初初始化所有配置参数为默认值。
 	err = component.LoadEnvDefault()
@@ -126,6 +127,7 @@ func SetupCloseHandler() {
 	go func() {
 		<-c
 		log.Println("\r- Ctrl+C pressed in Terminal")
+		component.Nodes.Stop()
 		os.Exit(0)
 	}()
 }

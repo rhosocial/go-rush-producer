@@ -1,10 +1,10 @@
 module github.com/rhosocial/go-rush-producer
 
-go 1.19
+go 1.20
 
 require (
 	github.com/gin-gonic/gin v1.9.0
-	github.com/rhosocial/go-rush-common v0.0.0-20230418060326-364ed53efaae
+	github.com/rhosocial/go-rush-common v0.0.0-20230419074704-79205a350715
 	gorm.io/driver/mysql v1.5.0
 	gorm.io/gorm v1.25.0
 )
