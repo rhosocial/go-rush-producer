@@ -63,7 +63,7 @@ func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 
 // ActionSlaveNotifyMasterAddSelf 从节点通知主节点（自己）添加其为从节点。
 // 从节点应当发来 component.FreshNodeInfo 信息。
-// TODO: 校验从节点发来的 component.FreshNodeInfo 信息。
+// TODO: 校验从节点发来的 models.FreshNodeInfo 信息。
 func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 	port, err := strconv.ParseUint(r.PostForm("port"), 10, 16)
 	if err != nil {

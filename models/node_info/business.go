@@ -219,3 +219,23 @@ func (n *RegisteredNodeInfo) Encode() string {
 	params.Add("is_active", strconv.Itoa(int(n.IsActive)))
 	return params.Encode()
 }
+
+func InitRegisteredWithModel(node *NodeInfo) *RegisteredNodeInfo {
+	if node == nil {
+		return nil
+	}
+	var registered = RegisteredNodeInfo{
+		FreshNodeInfo: FreshNodeInfo{
+			Name:        node.Name,
+			NodeVersion: node.NodeVersion,
+			Host:        node.Host,
+			Port:        node.Port,
+		},
+		ID:         node.ID,
+		Level:      node.Level,
+		SuperiorID: node.SuperiorID,
+		Order:      node.Order,
+		IsActive:   node.IsActive,
+	}
+	return &registered
+}
