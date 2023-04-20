@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	FieldIsActiveActive               = 0
-	FieldIsActiveReportExited         = 1
-	FieldIsActiveSuperiorDetectExited = 2
+	FieldIsActiveActive                  = 0
+	FieldIsActiveSuperiorDetectExited    = 1
+	FieldIsActiveSubordinateDetectExited = 2
 )
 
 type NodeInfo struct {
@@ -29,4 +29,21 @@ type NodeInfo struct {
 
 func (m *NodeInfo) TableName() string {
 	return "node_info"
+}
+
+// FreshNodeInfo 新节点信息。
+type FreshNodeInfo struct {
+	Name        string `form:"name" json:"name" binding:"required"`
+	NodeVersion string `form:"node_version" json:"node_version" binding:"required"`
+	Host        string `form:"host" json:"string" binding:"required"`
+	Port        uint16 `form:"port" json:"port" binding:"required"`
+}
+
+type RegisteredNodeInfo struct {
+	FreshNodeInfo
+	ID         uint64 `json:"id" binding:"required"`
+	Level      uint8  `json:"level" binding:"required"`
+	SuperiorID uint64 `json:"superior_id" binding:"required"`
+	Order      uint   `json:"order" binding:"required"`
+	IsActive   uint8  `json:"is_active" binding:"required"`
 }

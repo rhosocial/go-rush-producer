@@ -8,8 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -140,36 +138,6 @@ func NewNodePool(self *models.NodeInfo) *NodePool {
 	return &nodes
 }
 
-// FreshNodeInfo 新节点信息。
-type FreshNodeInfo struct {
-	Name        string `form:"name" json:"name" binding:"required"`
-	NodeVersion string `form:"node_version" json:"node_version" binding:"required"`
-	Host        string `form:"host" json:"string" binding:"required"`
-	Port        uint16 `form:"port" json:"port" binding:"required"`
-}
-
-func (n *FreshNodeInfo) Encode() string {
-	params := make(url.Values)
-	params.Add("name", n.Name)
-	params.Add("node_version", n.NodeVersion)
-	params.Add("host", n.Host)
-	params.Add("port", strconv.Itoa(int(n.Port)))
-	return params.Encode()
-}
-
-func (n *FreshNodeInfo) Log() string {
-	return fmt.Sprintf("Fresh Node: %39s:%-5d | %s @ %s", n.Host, n.Port, n.Name, n.NodeVersion)
-}
-
-func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
-	if n != nil && target == nil || n == nil && target != nil {
-		return false
-	}
-	log.Println("Origin: ", n.Log())
-	log.Println("Target: ", target.Log())
-	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
-}
-
 var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info")
 
 // CheckSlave 检查从节点是否有效。检查通过则返回节点信息 models.NodeInfo。
@@ -177,14 +145,14 @@ var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info
 // 1. 若节点不存在，则报 ErrNodeMasterDoesNotHaveSpecifiedSlave。
 //
 // 2. 检查 FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
-func (n *NodePool) CheckSlave(id uint64, fresh *FreshNodeInfo) (*models.NodeInfo, error) {
+func (n *NodePool) CheckSlave(id uint64, fresh *models.FreshNodeInfo) (*models.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
 	slave, exist := n.Slaves[id]
 	if !exist {
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
 	// 再检查 FreshNodeInfo 是否相同。
-	origin := FreshNodeInfo{
+	origin := models.FreshNodeInfo{
 		Name:        slave.Name,
 		NodeVersion: slave.NodeVersion,
 		Host:        slave.Host,
@@ -286,7 +254,7 @@ func (n *NodePool) AcceptMaster(node *models.NodeInfo) {
 	n.SwitchIdentitySlaveOn()
 }
 
-func (n *NodePool) CheckSlaveNodeIfExists(node *FreshNodeInfo) *models.NodeInfo {
+func (n *NodePool) CheckSlaveNodeIfExists(node *models.FreshNodeInfo) *models.NodeInfo {
 	for id, _ := range n.Slaves {
 		if slave, err := n.CheckSlave(id, node); err == nil {
 			return slave
@@ -295,7 +263,7 @@ func (n *NodePool) CheckSlaveNodeIfExists(node *FreshNodeInfo) *models.NodeInfo 
 	return nil
 }
 
-func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (*models.NodeInfo, error) {
+func (n *NodePool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error) {
 	log.Println(node.Log())
 	n.SlavesRWMutex.Lock()
 	defer n.SlavesRWMutex.Unlock()
@@ -327,7 +295,7 @@ func (n *NodePool) AcceptSlave(node *FreshNodeInfo) (*models.NodeInfo, error) {
 // 1. 检查节点是否有效。检查流程参见 CheckSlave。
 //
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
-func (n *NodePool) RemoveSlave(id uint64, fresh *FreshNodeInfo) (bool, error) {
+func (n *NodePool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
 	log.Printf("Remove Slave: %d\n", id)
 	n.SlavesRWMutex.Lock()
 	defer n.SlavesRWMutex.Unlock()
@@ -477,7 +445,7 @@ func (n *NodePool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	self := FreshNodeInfo{
+	self := models.FreshNodeInfo{
 		Host:        n.Self.Host,
 		Port:        n.Self.Port,
 		Name:        n.Self.Name,
@@ -501,7 +469,7 @@ func (n *NodePool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest
 	}
-	fresh := FreshNodeInfo{
+	fresh := models.FreshNodeInfo{
 		Host:        n.Self.Host,
 		Port:        n.Self.Port,
 		Name:        n.Self.Name,

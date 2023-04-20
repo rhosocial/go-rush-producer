@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	commonComponent "github.com/rhosocial/go-rush-common/component"
 	"github.com/rhosocial/go-rush-producer/component"
+	"github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type ControllerServer struct {
@@ -70,7 +71,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 		return
 	}
 	host := r.PostForm("host")
-	fresh := component.FreshNodeInfo{
+	fresh := models.FreshNodeInfo{
 		Name:        r.PostForm("name"),
 		NodeVersion: r.PostForm("node_version"),
 		Host:        r.ClientIP(),
@@ -114,7 +115,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 		r.AbortWithStatusJSON(http.StatusBadRequest, commonComponent.NewGenericResponse(r, 1, "failed to parse `port`", err.Error(), nil))
 		return
 	}
-	fresh := component.FreshNodeInfo{
+	fresh := models.FreshNodeInfo{
 		Host:        r.ClientIP(),
 		Port:        uint16(port),
 		Name:        r.Query("name"),

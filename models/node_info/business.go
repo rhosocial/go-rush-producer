@@ -3,6 +3,9 @@ package models
 import (
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
+	"strconv"
 
 	"gorm.io/gorm"
 )
@@ -46,10 +49,10 @@ func (m *NodeInfo) Socket() string {
 }
 
 func (m *NodeInfo) Log() string {
-	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%-5d | Superior: %10d | Level: %3d | Order: %3d\n",
+	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%-5d | Superior: %10d | Level: %3d | Order: %3d | Active: %d\n",
 		m.ID,
 		m.Host, m.Port,
-		m.SuperiorID, m.Level, m.Order,
+		m.SuperiorID, m.Level, m.Order, m.IsActive,
 	)
 }
 
@@ -170,4 +173,49 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 		return false, tx.Error
 	}
 	return true, nil
+}
+
+func (n *FreshNodeInfo) Encode() string {
+	params := make(url.Values)
+	params.Add("name", n.Name)
+	params.Add("node_version", n.NodeVersion)
+	params.Add("host", n.Host)
+	params.Add("port", strconv.Itoa(int(n.Port)))
+	return params.Encode()
+}
+
+func (n *FreshNodeInfo) Log() string {
+	return fmt.Sprintf("Fresh Node: %39s:%-5d | %s @ %s", n.Host, n.Port, n.Name, n.NodeVersion)
+}
+
+func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
+	if n != nil && target == nil || n == nil && target != nil {
+		return false
+	}
+	log.Println("Origin: ", n.Log())
+	log.Println("Target: ", target.Log())
+	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
+}
+
+// Log 输出信息。
+// TODO: 待补充 RegisteredNodeInfo 的 IsActive 字段友好输出。
+func (n *RegisteredNodeInfo) Log() string {
+	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Order: %3d | Active: %d\n",
+		n.Host, n.Port, n.Name, n.NodeVersion,
+		n.SuperiorID, n.Level, n.Order, n.IsActive,
+	)
+}
+
+func (n *RegisteredNodeInfo) Encode() string {
+	params := make(url.Values)
+	params.Add("name", n.Name)
+	params.Add("node_version", n.NodeVersion)
+	params.Add("host", n.Host)
+	params.Add("port", strconv.Itoa(int(n.Port)))
+	params.Add("id", strconv.FormatUint(n.ID, 10))
+	params.Add("level", strconv.Itoa(int(n.Level)))
+	params.Add("superior_id", strconv.FormatUint(n.SuperiorID, 10))
+	params.Add("order", strconv.FormatUint(uint64(n.Order), 10))
+	params.Add("is_active", strconv.Itoa(int(n.IsActive)))
+	return params.Encode()
 }
