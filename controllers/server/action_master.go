@@ -12,12 +12,19 @@ import (
 // ActionSlaveGetMasterStatus 从节点发起获取主节点（自己）状态的请求。
 // 应当返回请求节点的 r.Request.Host、r.ClientIP() 和 r.Request.RemoteAddr 供远程节点校验。
 func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
+	slaves := make(map[uint64]*models.RegisteredNodeInfo)
+	for i, v := range node.Nodes.Slaves {
+		slaves[i] = models.InitRegisteredWithModel(&v)
+	}
+
 	r.JSON(http.StatusOK, c.NewResponseGeneric(
 		r, 0, "success", node.RequestMasterStatusResponseData{
 			Host:       r.Request.Host,
 			ClientIP:   r.ClientIP(),
 			RemoteAddr: r.Request.RemoteAddr,
-		}, nil,
+		}, node.RequestMasterStatusResponseExtension{
+			Slaves: &slaves,
+		},
 	))
 }
 

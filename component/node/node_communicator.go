@@ -13,6 +13,33 @@ import (
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
+const (
+	RequestStatus             = 0x00000001
+	RequestMasterStatus       = 0x00010001
+	RequestMasterNotifyAdd    = 0x00010011
+	RequestMasterNotifyModify = 0x00010012
+	RequestMasterNotifyDelete = 0x00010013
+	RequestSlaveStatus        = 0x00020001
+	RequestSlaveNotify        = 0x00020011
+
+	RequestMethodStatus             = http.MethodGet
+	RequestMethodMasterStatus       = http.MethodGet
+	RequestMethodMasterNotifyAdd    = http.MethodPut
+	RequestMethodMasterNotifyDelete = http.MethodDelete
+	RequestMethodSlaveStatus        = http.MethodGet
+
+	RequestURLFormatStatus             = "http://%s/server"
+	RequestURLFormatMasterStatus       = "http://%s/server/master"
+	RequestURLFormatMasterNotifyAdd    = "http://%s/server/master/notify"
+	RequestURLFormatMasterNotifyModify = "http://%s/server/master/notify"
+	RequestURLFormatMasterNotifyDelete = "http://%s/server/master/notify"
+	RequestURLFormatSlaveStatus        = "http://%s/server/slave"
+	RequestURLFormatSlaveNotify        = "http://%s/server/slave/notify"
+
+	RequestHeaderXAuthorizationTokenKey   = "X-Authorization-Token"
+	RequestHeaderXAuthorizationTokenValue = "$2a$04$jajGD06BJd.KmTM7pgCRzeFSIMWLAUbTCOQPNJRDMnMltPZp3tK1y"
+)
+
 // DiscoverMasterNode 发现主节点。返回发现的节点信息指针。
 // 调用前，Pool.Self 必须已经设置 models.NodeInfo 的 Level 值。上级即为 Pool.Self.Level - 1，且不指定具体上级 ID。
 // 如果 Level 已经为 0，则没有更高级，报 models.ErrNodeLevelAlreadyHighest。
@@ -24,6 +51,8 @@ func (n *Pool) DiscoverMasterNode() (*models.NodeInfo, error) {
 	}
 	return node, nil
 }
+
+// ------ MasterStatus ------ //
 
 // SendRequestMasterStatus 向"主节点-状态"发送请求。
 // 如果已经是最高级，则报 models.ErrNodeLevelAlreadyHighest。
@@ -49,11 +78,16 @@ type RequestMasterStatusResponseData struct {
 }
 
 type RequestMasterStatusResponseExtension struct {
-	Slaves []models.RegisteredNodeInfo `json:"slaves,omitempty"`
+	Slaves *map[uint64]*models.RegisteredNodeInfo `json:"slaves,omitempty"`
 }
 
 type RequestMasterStatusResponse = response.Generic[RequestMasterStatusResponseData, RequestMasterStatusResponseExtension]
 
+// ------ MasterStatus ------ //
+
+// ------ MasterNotifyAdd ------ //
+
+// SendRequestMasterToAddSelfAsSlave 发送请求通知主节点添加自己为从节点。
 func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, models.ErrNodeLevelAlreadyHighest

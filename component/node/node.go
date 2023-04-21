@@ -13,33 +13,6 @@ import (
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
-const (
-	RequestStatus             = 0x00000001
-	RequestMasterStatus       = 0x00010001
-	RequestMasterNotifyAdd    = 0x00010011
-	RequestMasterNotifyModify = 0x00010012
-	RequestMasterNotifyDelete = 0x00010013
-	RequestSlaveStatus        = 0x00020001
-	RequestSlaveNotify        = 0x00020011
-
-	RequestMethodStatus             = http.MethodGet
-	RequestMethodMasterStatus       = http.MethodGet
-	RequestMethodMasterNotifyAdd    = http.MethodPut
-	RequestMethodMasterNotifyDelete = http.MethodDelete
-	RequestMethodSlaveStatus        = http.MethodGet
-
-	RequestURLFormatStatus             = "http://%s/server"
-	RequestURLFormatMasterStatus       = "http://%s/server/master"
-	RequestURLFormatMasterNotifyAdd    = "http://%s/server/master/notify"
-	RequestURLFormatMasterNotifyModify = "http://%s/server/master/notify"
-	RequestURLFormatMasterNotifyDelete = "http://%s/server/master/notify"
-	RequestURLFormatSlaveStatus        = "http://%s/server/slave"
-	RequestURLFormatSlaveNotify        = "http://%s/server/slave/notify"
-
-	RequestHeaderXAuthorizationTokenKey   = "X-Authorization-Token"
-	RequestHeaderXAuthorizationTokenValue = "$2a$04$jajGD06BJd.KmTM7pgCRzeFSIMWLAUbTCOQPNJRDMnMltPZp3tK1y"
-)
-
 type Pool struct {
 	Identity      uint8
 	Master        *models.NodeInfo
