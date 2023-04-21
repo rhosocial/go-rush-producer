@@ -45,10 +45,12 @@ const (
 // 如果 Level 已经为 0，则没有更高级，报 models.ErrNodeLevelAlreadyHighest。
 // 如果查找不到最高级，则报 models.ErrNodeSuperiorNotExist。
 func (n *Pool) DiscoverMasterNode() (*models.NodeInfo, error) {
+	log.Println("Discover Master...")
 	node, err := n.Self.GetSuperiorNode(false)
 	if err != nil {
 		return nil, err
 	}
+	log.Print("Discovered Master: ", node.Log())
 	return node, nil
 }
 
@@ -64,7 +66,8 @@ func (n *Pool) SendRequestMasterStatus() (*http.Response, error) {
 	}
 	req, err := PrepareNodeRequest(RequestMethodMasterStatus, RequestURLFormatMasterStatus, n.Master.Socket(), nil, "")
 	if err != nil {
-		return nil, err
+		log.Println(err)
+		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -101,7 +104,8 @@ func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	var body = strings.NewReader(self.Encode())
 	req, err := PrepareNodeRequest(RequestMethodMasterNotifyAdd, RequestURLFormatMasterNotifyAdd, n.Master.Socket(), body, "application/x-www-form-urlencoded")
 	if err != nil {
-		return nil, err
+		log.Println(err)
+		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -125,6 +129,7 @@ func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	query := fmt.Sprintf("?id=%d&%s", n.Self.ID, fresh.Encode())
 	req, err := PrepareNodeRequest(RequestMethodMasterNotifyDelete, RequestURLFormatMasterNotifyDelete+query, n.Master.Socket(), nil, "")
 	if err != nil {
+		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	req.Header.Add(RequestHeaderXAuthorizationTokenKey, RequestHeaderXAuthorizationTokenValue)
@@ -148,6 +153,7 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	}
 	req, err := PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatSlaveStatus, slave.Socket(), nil, "")
 	if err != nil {
+		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -155,6 +161,9 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	return resp, err
 }
 
+// PrepareNodeRequest 准备节点间通信请求。
+// 准备请求过程中产生错误将如实返回。
+// 建议用法：调用该函数获取到错误时，不向上继续反馈，而统一报 ErrNodeRequestInvalid 错误。并出错原因记录到日志。
 func PrepareNodeRequest(method string, urlFormat string, socket string, body io.Reader, contentType string) (*http.Request, error) {
 	URL := fmt.Sprintf(urlFormat, socket)
 	req, err := http.NewRequest(method, URL, body)
