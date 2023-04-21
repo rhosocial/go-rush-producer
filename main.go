@@ -9,9 +9,12 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
-	commonComponent "github.com/rhosocial/go-rush-common/component"
+	"github.com/rhosocial/go-rush-common/component/auth"
+	error2 "github.com/rhosocial/go-rush-common/component/error"
+	"github.com/rhosocial/go-rush-common/component/logger"
 	"github.com/rhosocial/go-rush-producer/component"
-	controllerSystem "github.com/rhosocial/go-rush-producer/controllers/system"
+	"github.com/rhosocial/go-rush-producer/component/node"
+	controllerSystem "github.com/rhosocial/go-rush-producer/controllers/server"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -46,57 +49,57 @@ func main() {
 		Port:        *(*(*component.GlobalEnv).Net).ListenPort,
 		Level:       1,
 	}
-	component.Nodes = component.NewNodePool(&self)
-	masterNode, err := component.Nodes.DiscoverMasterNode()
+	node.Nodes = node.NewNodePool(&self)
+	masterNode, err := node.Nodes.DiscoverMasterNode()
 	if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 		// Switch identity to master.
-		component.Nodes.CommitSelfAsMasterNode()
+		node.Nodes.CommitSelfAsMasterNode()
 	} else if err != nil {
 		log.Fatalln(err)
 	}
 	if masterNode == nil {
 	} else {
-		component.Nodes.Master = masterNode
+		node.Nodes.Master = masterNode
 		// Check `masterNode` if valid:
-		err = component.Nodes.CheckMaster(masterNode)
+		err = node.Nodes.CheckMaster(masterNode)
 		if err == nil {
 			// Regard `masterNode` as my master:
-			component.Nodes.AcceptMaster(masterNode)
+			node.Nodes.AcceptMaster(masterNode)
 			// Notify master to add this node as its slave:
-			_, err := component.Nodes.NotifyMasterToAddSelfAsSlave()
+			_, err := node.Nodes.NotifyMasterToAddSelfAsSlave()
 			if err != nil {
 				log.Fatalln(err)
 			}
-		} else if errors.Is(err, component.ErrNodeMasterIsSelf) {
+		} else if errors.Is(err, node.ErrNodeMasterIsSelf) {
 			// I am already a master node.
 			// Switch identity to master.
-			component.Nodes.Self = masterNode
-			component.Nodes.Master = component.Nodes.Self
-			component.Nodes.SwitchIdentityMasterOn()
-		} else if errors.Is(err, component.ErrNodeMasterExisted) {
+			node.Nodes.Self = masterNode
+			node.Nodes.Master = node.Nodes.Self
+			node.Nodes.SwitchIdentityMasterOn()
+		} else if errors.Is(err, node.ErrNodeMasterExisted) {
 			// A valid master node with the same socket already exists. Exiting.
 			log.Fatalln(err)
-		} else if errors.Is(err, component.ErrNodeMasterInvalid) {
+		} else if errors.Is(err, node.ErrNodeMasterInvalid) {
 			log.Fatalln(err)
-		} else if errors.Is(err, component.ErrNodeRequestInvalid) {
+		} else if errors.Is(err, node.ErrNodeRequestInvalid) {
 			log.Fatalln(err)
 		}
 	}
 	// For-loop
-	if component.Nodes.Identity == component.NodeIdentityNotDetermined {
+	if node.Nodes.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.
 		log.Println("Identity: Not determined.")
 	}
-	if component.Nodes.Identity == component.NodeIdentityMaster {
+	if node.Nodes.Identity == node.IdentityMaster {
 		// Start a goroutine to monitor its master.
 		log.Println("Identity: Master")
-		log.Printf("Self  : %s\n", component.Nodes.Self.Log())
+		log.Printf("Self  : %s\n", node.Nodes.Self.Log())
 	}
-	if component.Nodes.Identity == component.NodeIdentitySlave {
+	if node.Nodes.Identity == node.IdentitySlave {
 		// Start a goroutine to monitor its slaves.
 		log.Println("Identity: Slave.")
-		log.Printf("Master: %s", component.Nodes.Master.Log())
-		log.Printf("Self  : %s", component.Nodes.Self.Log())
+		log.Printf("Master: %s", node.Nodes.Master.Log())
+		log.Printf("Self  : %s", node.Nodes.Self.Log())
 	}
 	r = gin.New()
 	if !configEngine(r) {
@@ -107,11 +110,11 @@ func main() {
 
 func configEngine(r *gin.Engine) bool {
 	r.Use(
-		commonComponent.AppendRequestID(),
-		gin.LoggerWithFormatter(commonComponent.LogFormatter),
-		commonComponent.AuthRequired(),
+		logger.AppendRequestID(),
+		gin.LoggerWithFormatter(logger.LogFormatter),
+		auth.AuthRequired(),
 		gin.Recovery(),
-		commonComponent.ErrorHandler(),
+		error2.ErrorHandler(),
 	)
 	var ca controllerSystem.ControllerServer
 	ca.RegisterActions(r)
@@ -127,7 +130,7 @@ func SetupCloseHandler() {
 	go func() {
 		<-c
 		log.Println("\r- Ctrl+C pressed in Terminal")
-		component.Nodes.Stop()
+		node.Nodes.Stop()
 		os.Exit(0)
 	}()
 }
