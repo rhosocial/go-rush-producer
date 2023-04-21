@@ -23,6 +23,17 @@ type Pool struct {
 
 var Nodes *Pool
 
+func (n *Pool) GetRegisteredSlaveNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
+	n.SlavesRWMutex.RLock()
+	defer n.SlavesRWMutex.RUnlock()
+
+	slaves := make(map[uint64]*models.RegisteredNodeInfo)
+	for i, v := range n.Slaves {
+		slaves[i] = models.InitRegisteredWithModel(&v)
+	}
+	return &slaves
+}
+
 var ErrNetworkUnavailable = errors.New("network unavailable")
 
 func ExternalIP() (net.IP, error) {
