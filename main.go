@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +25,15 @@ var r *gin.Engine
 var db *gorm.DB
 var dsn = "root:Python4096@tcp(1.n.rho.im:13406)/node_demo?charset=utf8mb4&parseTime=true&loc=Local"
 
+func tryBindListenPort(addr string) error {
+	if listen, err := net.Listen("tcp", addr); err != nil {
+		return err
+	} else {
+		listen.Close()
+	}
+	return nil
+}
+
 func main() {
 	log.Println("Hello, World!")
 	SetupCloseHandler()
@@ -37,6 +47,11 @@ func main() {
 	// 再从环境变量中加载配置信息。
 	if err := component.LoadEnvFromSystemEnvVar(); err != nil {
 		println(err.Error())
+	}
+	// 尝试监听端口。
+	if tryBindListenPort(fmt.Sprintf(":%d", *(*(*component.GlobalEnv).Net).ListenPort)) != nil {
+		log.Fatalf("Cannot bind the listening port: %d\n", *(*(*component.GlobalEnv).Net).ListenPort)
+		return
 	}
 	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
