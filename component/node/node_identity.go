@@ -81,7 +81,6 @@ func (n *Pool) startMaster(master *models.NodeInfo, err error) error {
 		return err
 	} else if errors.Is(err, ErrNodeMasterIsSelf) {
 		// 主节点是自己，将自己作为主节点。但不更新数据库。
-		return nil
 	} else if errors.Is(err, ErrNodeRequestInvalid) {
 		// 构造请求出错，直接退出。
 		return err
@@ -92,10 +91,13 @@ func (n *Pool) startMaster(master *models.NodeInfo, err error) error {
 		log.Println(err)
 		return err
 	}
+	n.Self = master
+	n.Master = n.Self
 	n.SwitchIdentityMasterOn()
 	return nil
 }
 
+// startSlave 将自己作为 master 的从节点。
 func (n *Pool) startSlave(master *models.NodeInfo, err error) error {
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 已经是最高级，不存在上级主节点。
@@ -177,6 +179,7 @@ func (n *Pool) Start(identity int) error {
 			return n.startMaster(master, err)
 		} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 			// 主节点不存在，设置自己为主节点。
+			n.Self.Level -= 1
 			return n.startMaster(n.Self, nil)
 		} else if errors.Is(err, models.ErrNodeDatabaseError) {
 			// 数据库出错，直接退出。
@@ -186,7 +189,7 @@ func (n *Pool) Start(identity int) error {
 			return err
 		} else if errors.Is(err, ErrNodeMasterIsSelf) {
 			// 主节点是自己，将自己作为主节点。但不更新数据库。
-			return n.startMaster(n.Self, nil)
+			return n.startMaster(master, nil)
 		} else if errors.Is(err, ErrNodeRequestInvalid) {
 			// 构造请求出错，直接退出。
 			return err

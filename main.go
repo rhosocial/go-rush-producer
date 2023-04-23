@@ -68,6 +68,7 @@ func main() {
 	}
 	node.Nodes = node.NewNodePool(&self)
 	node.Nodes.Start((*component.GlobalEnv).Identity)
+	defer node.Nodes.Stop()
 	// For-loop
 	if node.Nodes.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.
