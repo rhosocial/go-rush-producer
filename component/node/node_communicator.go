@@ -40,33 +40,17 @@ const (
 	RequestHeaderXAuthorizationTokenValue = "$2a$04$jajGD06BJd.KmTM7pgCRzeFSIMWLAUbTCOQPNJRDMnMltPZp3tK1y"
 )
 
-// DiscoverMasterNode 发现主节点。返回发现的节点信息指针。
-// 调用前，Pool.Self 必须已经设置 models.NodeInfo 的 Level 值。上级即为 Pool.Self.Level - 1，且不指定具体上级 ID。
-// 如果 Level 已经为 0，则没有更高级，报 models.ErrNodeLevelAlreadyHighest。
-// 如果查找不到最高级，则报 models.ErrNodeSuperiorNotExist。
-func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error) {
-	log.Println("Discover master...")
-	if node, err := n.Self.GetSuperiorNode(specifySuperior); err == nil {
-		log.Print("Discovered master: ", node.Log())
-		err = n.CheckMaster(node)
-		return node, err
-	} else {
-		log.Println("Error(s) reported when discovering master: ", err)
-		return nil, err
-	}
-}
-
 // ------ MasterStatus ------ //
 
 // SendRequestMasterStatus 向"主节点-状态"发送请求。
 // 如果已经是最高级，则报 models.ErrNodeLevelAlreadyHighest。
 // 如果构建请求出错，则据实返回，此时第一个返回值为空。
 // 请求构建成功，则发送请求，超时固定设为 1 秒。并返回响应和对应的错误。
-func (n *Pool) SendRequestMasterStatus() (*http.Response, error) {
-	if n.Master == nil {
-		return nil, models.ErrNodeLevelAlreadyHighest
+func SendRequestMasterStatus(master *models.NodeInfo) (*http.Response, error) {
+	if master == nil {
+		return nil, ErrNodeLevelAlreadyHighest
 	}
-	req, err := PrepareNodeRequest(RequestMethodMasterStatus, RequestURLFormatMasterStatus, n.Master.Socket(), nil, "")
+	req, err := PrepareNodeRequest(RequestMethodMasterStatus, RequestURLFormatMasterStatus, master.Socket(), nil, "")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -95,7 +79,7 @@ type RequestMasterStatusResponse = response.Generic[RequestMasterStatusResponseD
 // SendRequestMasterToAddSelfAsSlave 发送请求通知主节点添加自己为从节点。
 func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master == nil {
-		return nil, models.ErrNodeLevelAlreadyHighest
+		return nil, ErrNodeLevelAlreadyHighest
 	}
 	self := models.FreshNodeInfo{
 		Host:        n.Self.Host,
@@ -120,7 +104,7 @@ func (n *Pool) CheckResponseMasterNotifyAdd(response *http.Response, err error) 
 
 func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master == nil {
-		return nil, models.ErrNodeLevelAlreadyHighest
+		return nil, ErrNodeLevelAlreadyHighest
 	}
 	fresh := models.FreshNodeInfo{
 		Host:        n.Self.Host,

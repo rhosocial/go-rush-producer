@@ -63,7 +63,6 @@ func main() {
 		Level:       1,
 	}
 	node.Nodes = node.NewNodePool(&self)
-	node.Nodes.Master = node.Nodes.Self
 	node.Nodes.Start((*component.GlobalEnv).Identity)
 	// For-loop
 	if node.Nodes.Identity == node.IdentityNotDetermined {

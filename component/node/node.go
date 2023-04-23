@@ -132,10 +132,10 @@ func (n *Pool) CommitSelfAsMasterNode() (bool, error) {
 	n.Self.Level = n.Self.Level - 1
 	if _, err := n.Self.CommitSelfAsMasterNode(); err == nil {
 		n.Master = n.Self
-		n.Identity = n.Identity | IdentityMaster
 		return true, nil
+	} else {
+		return false, nil
 	}
-	return false, nil
 }
 
 var ErrNodeMasterInvalid = errors.New("master node invalid")
@@ -147,17 +147,11 @@ var ErrNodeMasterExisted = errors.New("a valid master node with the same socket 
 // CheckMaster 检查主节点有效性。如果有效，则返回 nil。
 // 如果指定主节点不存在，则报 ErrNodeMasterInvalid。
 //
-// 尝试连接主节点。如果返回 ErrNodeRequestInvalid，则视为请求异常。
-//
 // 判断 master 的套接字是否与自己相同。
 //
-// 1. 如果相同，则认为是自己。
-// 如果连接未报错，则表明已经存在对应节点，报 ErrNodeMasterExisted；
-// 如果连接报错，则将 master 作为异常失效信息，报 ErrNodeMasterIsSelf。
+// 1. 如果相同，则认为是自己，报 ErrNodeMasterIsSelf。
 //
-// 2. 如果不同，则认为主节点是另一个进程。
-// 如果连接报错，则报 ErrNodeMasterInvalid。
-// 如果连接返回状态码不是 http.StatusOK，则同样视为报错。
+// 2. 如果不同，则认为主节点是另一个进程。尝试与其沟通，参见 CheckMasterWithRequest。
 func (n *Pool) CheckMaster(master *models.NodeInfo) error {
 	if master == nil {
 		log.Println("Master not specified")
@@ -166,11 +160,35 @@ func (n *Pool) CheckMaster(master *models.NodeInfo) error {
 	if n.Self.IsSocketEqual(master) {
 		return ErrNodeMasterIsSelf
 	}
+	return n.CheckMasterWithRequest(master)
+}
+
+// CheckMasterWithRequest 发送请求查询主节点状态。
+//
+// 如果指定主节点不存在，则报 ErrNodeMasterInvalid。
+//
+// 1. 如果请求构造出错，则报 ErrNodeRequestInvalid。
+//
+// 2. 如果 Socket 相同，则认为主节点已存在，报 ErrNodeMasterExisted。
+//
+// 3. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
+//
+// 其它情况没有任何错误。
+func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
+	if master == nil {
+		log.Println("Master not specified")
+		return ErrNodeMasterInvalid
+	}
 	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
-	resp, err := n.SendRequestMasterStatus()
+	resp, err := SendRequestMasterStatus(master)
 	if err != nil {
 		log.Println(err)
 		return ErrNodeRequestInvalid
+	}
+	// 此时目标主节点网络正常。
+	// 若与自己套接字相同，则视为已存在。
+	if n.Self.IsSocketEqual(master) {
+		return ErrNodeMasterExisted
 	}
 	if resp.StatusCode != http.StatusOK {
 		var body = make([]byte, resp.ContentLength)

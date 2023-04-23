@@ -56,17 +56,14 @@ func (m *NodeInfo) Log() string {
 	)
 }
 
-var ErrNodeLevelAlreadyHighest = errors.New("it's already the highest level")
 var ErrNodeSuperiorNotExist = errors.New("superior node not exist")
+var ErrNodeDatabaseError = errors.New("node database error") // TODO: 具体错误信息待完善。
 
 // GetSuperiorNode 获得当前级别的上级节点。如果要指定上级，则 specifySuperior = true。
 // 如果为发现上级阶段，则不指定上级。如果为检查上级，则需要指定。
 // 如果已经是最高级，则报 ErrNodeLevelAlreadyHighest。
-// 如果查询数据库不存在上级节点，则报 ErrNodeSuperiorNotExist。其它数据库错误据实返回。
+// 如果查询数据库不存在上级节点，则报 ErrNodeSuperiorNotExist。其它数据库错误则报 ErrNodeDatabaseError。
 func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
-	if m.Level == 0 {
-		return nil, ErrNodeLevelAlreadyHighest
-	}
 	var node NodeInfo
 	var condition = map[string]interface{}{
 		"is_active": FieldIsActiveActive,
@@ -78,7 +75,8 @@ func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 	if tx := NodeInfoDB.Where(condition).First(&node); tx.Error == gorm.ErrRecordNotFound {
 		return nil, ErrNodeSuperiorNotExist
 	} else if tx.Error != nil {
-		return nil, tx.Error
+		log.Println(tx.Error)
+		return nil, ErrNodeDatabaseError
 	}
 	return &node, nil
 }
@@ -123,11 +121,11 @@ func (m *NodeInfo) GetAllActiveSlaveNodes() (*[]NodeInfo, error) {
 // 从节点的上级节点为当前节点。
 // 从节点的 Level 为当前节点 + 1。
 // 从节点的 Order 为当前所有节点最大 Order + 1。如果没有从节点，则默认为 1。
-func (m *NodeInfo) AddSlaveNode(node *NodeInfo) (bool, error) {
-	node.SuperiorID = m.ID
-	node.Level = m.Level + 1
-	node.Order = 0
-	if tx := NodeInfoDB.Create(node); tx.Error != nil {
+func (m *NodeInfo) AddSlaveNode(n *NodeInfo) (bool, error) {
+	n.SuperiorID = m.ID
+	n.Level = m.Level + 1
+	n.Order = 0
+	if tx := NodeInfoDB.Create(n); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
@@ -141,9 +139,6 @@ func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
 }
 
 func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
-	if m.Level == 0 {
-		return false, ErrNodeLevelAlreadyHighest
-	}
 	m.Level = master.Level
 	m.Order = master.Order
 	m.IsActive = FieldIsActiveActive
@@ -220,22 +215,22 @@ func (n *RegisteredNodeInfo) Encode() string {
 	return params.Encode()
 }
 
-func InitRegisteredWithModel(node *NodeInfo) *RegisteredNodeInfo {
-	if node == nil {
+func InitRegisteredWithModel(n *NodeInfo) *RegisteredNodeInfo {
+	if n == nil {
 		return nil
 	}
 	var registered = RegisteredNodeInfo{
 		FreshNodeInfo: FreshNodeInfo{
-			Name:        node.Name,
-			NodeVersion: node.NodeVersion,
-			Host:        node.Host,
-			Port:        node.Port,
+			Name:        n.Name,
+			NodeVersion: n.NodeVersion,
+			Host:        n.Host,
+			Port:        n.Port,
 		},
-		ID:         node.ID,
-		Level:      node.Level,
-		SuperiorID: node.SuperiorID,
-		Order:      node.Order,
-		IsActive:   node.IsActive,
+		ID:         n.ID,
+		Level:      n.Level,
+		SuperiorID: n.SuperiorID,
+		Order:      n.Order,
+		IsActive:   n.IsActive,
 	}
 	return &registered
 }
