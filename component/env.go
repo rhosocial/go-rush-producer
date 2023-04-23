@@ -4,6 +4,9 @@ import (
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/rhosocial/go-rush-common/component/mysql"
+	"gopkg.in/yaml.v3"
 )
 
 type EnvNet struct {
@@ -23,7 +26,8 @@ func (e *EnvNet) Validate() error {
 }
 
 type Env struct {
-	Net *EnvNet `yaml:"Net,omitempty"`
+	Net          *EnvNet                 `yaml:"Net,omitempty"`
+	MySQLServers *[]mysql.EnvMySQLServer `yaml:"MySQLServers,omitempty"`
 }
 
 // GetNetDefault 取得 EnvNet 的默认值。
@@ -62,13 +66,25 @@ func (e *Env) Validate() error {
 }
 
 func LoadEnvFromYaml(filepath string) error {
-	var env Env
-	GlobalEnv = &env
+	file, err := os.ReadFile(filepath)
+	if err != nil {
+		return err
+	}
+	if GlobalEnv == nil {
+		var env Env
+		err := env.Validate()
+		if err != nil {
+			return err
+		}
+		GlobalEnv = &env
+	}
+	if err := yaml.Unmarshal(file, GlobalEnv); err != nil {
+		return err
+	}
+	if err := GlobalEnv.Validate(); err != nil {
+		return err
+	}
 	return nil
-}
-
-func LoadEnvFromDefaultYaml() error {
-	return LoadEnvFromYaml("default.yaml")
 }
 
 func LoadEnvFromSystemEnvVar() error {

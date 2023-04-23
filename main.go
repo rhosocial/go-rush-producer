@@ -23,7 +23,6 @@ import (
 
 var r *gin.Engine
 var db *gorm.DB
-var dsn = "root:Python4096@tcp(1.n.rho.im:13406)/node_demo?charset=utf8mb4&parseTime=true&loc=Local"
 
 func tryBindListenPort(addr string) error {
 	if listen, err := net.Listen("tcp", addr); err != nil {
@@ -37,23 +36,23 @@ func tryBindListenPort(addr string) error {
 func main() {
 	log.Println("Hello, World!")
 	SetupCloseHandler()
-	var err error
 	// 最初初始化所有配置参数为默认值。
-	err = component.LoadEnvDefault()
-	if err != nil {
-		println(err.Error())
-		return
+	if err := component.LoadEnvDefault(); err != nil {
+		log.Println(err.Error())
+	}
+	if err := component.LoadEnvFromYaml("default.yaml"); err != nil {
+		log.Println(err.Error())
 	}
 	// 再从环境变量中加载配置信息。
 	if err := component.LoadEnvFromSystemEnvVar(); err != nil {
-		println(err.Error())
+		log.Println(err.Error())
 	}
 	// 尝试监听端口。
 	if tryBindListenPort(fmt.Sprintf(":%d", *(*(*component.GlobalEnv).Net).ListenPort)) != nil {
 		log.Fatalf("Cannot bind the listening port: %d\n", *(*(*component.GlobalEnv).Net).ListenPort)
 		return
 	}
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open((*(*component.GlobalEnv).MySQLServers)[0].GetDSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatalln(err)
 	}
