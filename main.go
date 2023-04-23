@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -64,41 +63,8 @@ func main() {
 		Level:       1,
 	}
 	node.Nodes = node.NewNodePool(&self)
-	masterNode, err := node.Nodes.DiscoverMasterNode()
-	if errors.Is(err, models.ErrNodeSuperiorNotExist) {
-		// Switch identity to master.
-		node.Nodes.CommitSelfAsMasterNode()
-	} else if err != nil {
-		log.Fatalln(err)
-	}
-	if masterNode == nil {
-	} else {
-		node.Nodes.Master = masterNode
-		// Check `masterNode` if valid:
-		err = node.Nodes.CheckMaster(masterNode)
-		if err == nil {
-			// Regard `masterNode` as my master:
-			node.Nodes.AcceptMaster(masterNode)
-			// Notify master to add this node as its slave:
-			_, err := node.Nodes.NotifyMasterToAddSelfAsSlave()
-			if err != nil {
-				log.Fatalln(err)
-			}
-		} else if errors.Is(err, node.ErrNodeMasterIsSelf) {
-			// I am already a master node.
-			// Switch identity to master.
-			node.Nodes.Self = masterNode
-			node.Nodes.Master = node.Nodes.Self
-			node.Nodes.SwitchIdentityMasterOn()
-		} else if errors.Is(err, node.ErrNodeMasterExisted) {
-			// A valid master node with the same socket already exists. Exiting.
-			log.Fatalln(err)
-		} else if errors.Is(err, node.ErrNodeMasterInvalid) {
-			log.Fatalln(err)
-		} else if errors.Is(err, node.ErrNodeRequestInvalid) {
-			log.Fatalln(err)
-		}
-	}
+	node.Nodes.Master = node.Nodes.Self
+	node.Nodes.Start((*component.GlobalEnv).Identity)
 	// For-loop
 	if node.Nodes.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.

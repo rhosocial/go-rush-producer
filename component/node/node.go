@@ -163,17 +163,14 @@ func (n *Pool) CheckMaster(master *models.NodeInfo) error {
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid
 	}
+	if n.Self.IsSocketEqual(master) {
+		return ErrNodeMasterIsSelf
+	}
 	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
 	resp, err := n.SendRequestMasterStatus()
 	if err != nil {
 		log.Println(err)
 		return ErrNodeRequestInvalid
-	}
-	if n.Self.IsSocketEqual(master) {
-		if err == nil {
-			return ErrNodeMasterExisted
-		}
-		return ErrNodeMasterIsSelf
 	}
 	if resp.StatusCode != http.StatusOK {
 		var body = make([]byte, resp.ContentLength)

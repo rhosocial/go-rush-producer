@@ -44,14 +44,16 @@ const (
 // 调用前，Pool.Self 必须已经设置 models.NodeInfo 的 Level 值。上级即为 Pool.Self.Level - 1，且不指定具体上级 ID。
 // 如果 Level 已经为 0，则没有更高级，报 models.ErrNodeLevelAlreadyHighest。
 // 如果查找不到最高级，则报 models.ErrNodeSuperiorNotExist。
-func (n *Pool) DiscoverMasterNode() (*models.NodeInfo, error) {
-	log.Println("Discover Master...")
-	node, err := n.Self.GetSuperiorNode(false)
-	if err != nil {
+func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error) {
+	log.Println("Discover master...")
+	if node, err := n.Self.GetSuperiorNode(specifySuperior); err == nil {
+		log.Print("Discovered master: ", node.Log())
+		err = n.CheckMaster(node)
+		return node, err
+	} else {
+		log.Println("Error(s) reported when discovering master: ", err)
 		return nil, err
 	}
-	log.Print("Discovered Master: ", node.Log())
-	return node, nil
 }
 
 // ------ MasterStatus ------ //
@@ -181,25 +183,4 @@ func ParseNodeRequestResponse[T1 interface{}, T2 interface{}](resp *http.Respons
 	response.UnmarshalResponseBodyBaseWithDataAndExtension[T1, T2](resp)
 
 	return true, nil
-}
-
-// Stop 退出流程。
-//
-// 1. 若自己是 Master，则通知所有从节点停机或选择一个从节点并通知其接替自己。
-// 2. 若自己是 Slave，则通知主节点自己停机。
-// 3. 若身份未定，不做任何动作。
-func (n *Pool) Stop() {
-	if n.IsIdentityNotDetermined() {
-		return
-	}
-	if n.IsIdentityMaster() {
-		// 通知所有从节点停机或选择一个从节点并通知其接替自己。
-		// TODO: 通知从节点接替以及其它从节点切换主节点
-		n.NotifySlaveToTakeoverSelf()
-		n.NotifyAllSlavesToSwitchSuperior(uint64(0))
-	}
-	if n.IsIdentitySlave() {
-		// 通知主节点自己停机。
-		n.NotifyMasterToRemoveSelf()
-	}
 }

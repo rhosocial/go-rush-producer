@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/rhosocial/go-rush-common/component/mysql"
+	models "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,6 +29,8 @@ func (e *EnvNet) Validate() error {
 type Env struct {
 	Net          *EnvNet                 `yaml:"Net,omitempty"`
 	MySQLServers *[]mysql.EnvMySQLServer `yaml:"MySQLServers,omitempty"`
+	Identity     int                     `yaml:"Identity,omitempty" default:"0"`
+	Master       *models.FreshNodeInfo   `yaml:"Master,omitempty"`
 }
 
 // GetNetDefault 取得 EnvNet 的默认值。
@@ -100,6 +103,11 @@ func LoadEnvFromSystemEnvVar() error {
 		log.Println("Producer_Net_ListenPort: ", value)
 		port, _ := strconv.ParseUint(value, 10, 16)
 		*(*GlobalEnv.Net).ListenPort = uint16(port)
+	}
+	if value, exist := os.LookupEnv("Producer_Identity"); exist {
+		log.Println("Producer_Identity: ", value)
+		identity, _ := strconv.ParseInt(value, 10, 32)
+		GlobalEnv.Identity = int(identity)
 	}
 	return nil
 }
