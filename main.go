@@ -51,6 +51,10 @@ func main() {
 		log.Fatalf("Cannot bind the listening port: %d\n", *(*(*component.GlobalEnv).Net).ListenPort)
 		return
 	}
+	if component.GlobalEnv.MySQLServers == nil || len(*(component.GlobalEnv).MySQLServers) == 0 {
+		log.Fatalln("Cannot find MySQL connection.")
+		return
+	}
 	db, err := gorm.Open(mysql.Open((*(*component.GlobalEnv).MySQLServers)[0].GetDSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatalln(err)
