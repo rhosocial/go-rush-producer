@@ -159,11 +159,11 @@ var ErrNodeMasterExisted = errors.New("a valid master node with the same socket 
 // 如果连接报错，则报 ErrNodeMasterInvalid。
 // 如果连接返回状态码不是 http.StatusOK，则同样视为报错。
 func (n *Pool) CheckMaster(master *models.NodeInfo) error {
-	log.Println("Checking Master...")
 	if master == nil {
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid
 	}
+	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
 	resp, err := n.SendRequestMasterStatus()
 	if err != nil {
 		log.Println(err)
