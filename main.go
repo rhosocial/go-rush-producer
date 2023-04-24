@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -67,8 +68,8 @@ func main() {
 		Level:       1,
 	}
 	node.Nodes = node.NewNodePool(&self)
-	node.Nodes.Start((*component.GlobalEnv).Identity)
-	defer node.Nodes.Stop()
+	node.Nodes.Start(context.Background(), (*component.GlobalEnv).Identity)
+	defer node.Nodes.Stop(context.Background())
 	// For-loop
 	if node.Nodes.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.
@@ -114,7 +115,7 @@ func SetupCloseHandler() {
 	go func() {
 		<-c
 		log.Println("\r- Ctrl+C pressed in Terminal")
-		node.Nodes.Stop()
+		node.Nodes.Stop(context.Background())
 		os.Exit(0)
 	}()
 }

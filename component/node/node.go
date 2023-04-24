@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,11 +15,25 @@ import (
 )
 
 type Pool struct {
-	Identity      uint8
-	Master        *models.NodeInfo
-	Self          *models.NodeInfo
-	SlavesRWMutex sync.RWMutex
-	Slaves        map[uint64]models.NodeInfo
+	Identity                     uint8
+	Master                       *models.NodeInfo
+	Self                         *models.NodeInfo
+	SlavesRWMutex                sync.RWMutex
+	Slaves                       map[uint64]models.NodeInfo
+	WorkerMasterCancelFunc       context.CancelCauseFunc
+	WorkerMasterCancelFuncRWLock sync.RWMutex
+	WorkerSlaveCancelFunc        context.CancelCauseFunc
+	WorkerSlaveCancelFuncRWLock  sync.RWMutex
+}
+
+// IsMasterWorking 判断主节点协程是否正在工作。
+func (n *Pool) IsMasterWorking() bool {
+	return n.WorkerMasterCancelFunc != nil
+}
+
+// IsSlaveWorking 判断主节点协程是否正在工作。
+func (n *Pool) IsSlaveWorking() bool {
+	return n.WorkerSlaveCancelFunc != nil
 }
 
 var Nodes *Pool

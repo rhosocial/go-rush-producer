@@ -37,14 +37,6 @@ func (m *NodeInfo) GetPeerActiveNodes() (*[]NodeInfo, error) {
 	return &nodes, nil
 }
 
-func (m *NodeInfo) IsMaster() bool {
-	nodes, err := m.GetPeerActiveNodes()
-	if err != nil {
-		return false
-	}
-	return (*nodes)[0].Order == m.Order
-}
-
 func (m *NodeInfo) Socket() string {
 	return fmt.Sprintf("%s:%d", m.Host, m.Port)
 }

@@ -102,6 +102,10 @@ func (n *Pool) CheckResponseMasterNotifyAdd(response *http.Response, err error) 
 
 }
 
+// ------ MasterNotifyAdd ------ //
+
+// ------ MasterNotifyRemove ------ //
+
 func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master == nil {
 		return nil, ErrNodeLevelAlreadyHighest
@@ -128,8 +132,12 @@ func (n *Pool) CheckResponseMasterNotifyDelete(response *http.Response, err erro
 
 }
 
+// ------ MasterNotifyRemove ------ //
+
 var ErrNodeMasterDoesNotHaveSpecifiedSlave = errors.New("the specified slave node does not exist on the current master node")
 var ErrNodeRequestInvalid = errors.New("invalid node request")
+
+// ------ SlaveGetStatus ------ //
 
 // SendRequestSlaveStatus 发送请求：获取指定ID从节点状态。
 func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
@@ -146,6 +154,8 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	resp, err := client.Do(req)
 	return resp, err
 }
+
+// ------ SlaveGetStatus ------ //
 
 // PrepareNodeRequest 准备节点间通信请求。
 // 准备请求过程中产生错误将如实返回。

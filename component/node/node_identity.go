@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"log"
 
@@ -68,12 +69,16 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error
 	}
 }
 
-func (n *Pool) startMaster(master *models.NodeInfo, err error) error {
+func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err error) error {
+	isMasterFresh := false
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 什么也不做
 	} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
-		n.CommitSelfAsMasterNode()
+		result, _ := n.CommitSelfAsMasterNode()
+		if result {
+			isMasterFresh = true
+		}
 	} else if errors.Is(err, models.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
 		return err
@@ -95,11 +100,14 @@ func (n *Pool) startMaster(master *models.NodeInfo, err error) error {
 	n.Self = master
 	n.Master = n.Self
 	n.SwitchIdentityMasterOn()
+	if isMasterFresh {
+		n.Self.LogReportFreshMasterJoined()
+	}
 	return nil
 }
 
 // startSlave 将自己作为 master 的从节点。
-func (n *Pool) startSlave(master *models.NodeInfo, err error) error {
+func (n *Pool) startSlave(ctx context.Context, master *models.NodeInfo, err error) error {
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 已经是最高级，不存在上级主节点。
 		return err
@@ -132,10 +140,23 @@ func (n *Pool) startSlave(master *models.NodeInfo, err error) error {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	n.WorkerSlaveCancelFuncRWLock.Lock()
+	defer n.WorkerSlaveCancelFuncRWLock.Unlock()
+	if n.WorkerSlaveCancelFunc != nil {
+		// 已经启动了。
+	} else {
+		ctxChild, cancel := context.WithCancelCause(ctx)
+		n.WorkerSlaveCancelFunc = cancel
+		go n.workerSlave(ctxChild, WorkerSlaveIntervals{
+			Base: 1000,
+		})
+	}
+
 	return nil
 }
 
-func (n *Pool) stopMaster() error {
+func (n *Pool) stopMaster(ctx context.Context) error {
 	n.SwitchIdentityMasterOff()
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// TODO: 通知从节点接替以及其它从节点切换主节点
@@ -145,10 +166,19 @@ func (n *Pool) stopMaster() error {
 	return nil
 }
 
-func (n *Pool) stopSlave() error {
+func (n *Pool) stopSlave(ctx context.Context) error {
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
 	n.NotifyMasterToRemoveSelf()
+
+	n.WorkerSlaveCancelFuncRWLock.Lock()
+	defer n.WorkerSlaveCancelFuncRWLock.Unlock()
+	if n.WorkerSlaveCancelFunc == nil {
+		// 未启动。
+	} else {
+		n.WorkerSlaveCancelFunc(errors.New("stop"))
+		n.WorkerMasterCancelFunc = nil
+	}
 	return nil
 }
 
@@ -158,7 +188,7 @@ func (n *Pool) stopSlave() error {
 // 1. 端口能够成功绑定，否则会产生不可预知的后果。
 // 2. n.Self 已准备好。
 // 3. 若指定为从节点模式，则 n.Master 也应当准备好。
-func (n *Pool) Start(identity int) error {
+func (n *Pool) Start(ctx context.Context, identity int) error {
 	master, err := n.DiscoverMasterNode(false)
 	if identity == IdentityMaster { // 指定为 Master。
 		// 发现主节点。
@@ -167,12 +197,12 @@ func (n *Pool) Start(identity int) error {
 		// 如果不能正常连接，则检查数据库存活。
 		// 如果存活，则退出。如果并不存活。则尝试接替。
 		log.Println(master, err)
-		return n.startMaster(master, err)
+		return n.startMaster(ctx, master, err)
 	} else if identity == IdentitySlave {
 		// 指定为 Slave，失败则退出。
 		log.Println(master, err)
 		// 未出错时启动从节点模式。
-		return n.startSlave(master, err)
+		return n.startSlave(ctx, master, err)
 	} else if identity == IdentityAll {
 		// 不指定具体身份：
 		// 1. 先按从节点发现主节点。若主节点存在，则尝试加入。
@@ -184,10 +214,10 @@ func (n *Pool) Start(identity int) error {
 
 		if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 			// 已经是最高级，不存在上级主节点。认为自己是主节点。
-			return n.startMaster(master, err)
+			return n.startMaster(ctx, master, err)
 		} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 			// 主节点不存在，设置自己为主节点。
-			return n.startMaster(n.Self, models.ErrNodeSuperiorNotExist)
+			return n.startMaster(ctx, n.Self, models.ErrNodeSuperiorNotExist)
 		} else if errors.Is(err, models.ErrNodeDatabaseError) {
 			// 数据库出错，直接退出。
 			return err
@@ -196,19 +226,19 @@ func (n *Pool) Start(identity int) error {
 			return err
 		} else if errors.Is(err, ErrNodeMasterIsSelf) {
 			// 主节点是自己，将自己作为主节点。但不更新数据库。
-			return n.startMaster(master, nil)
+			return n.startMaster(ctx, master, nil)
 		} else if errors.Is(err, ErrNodeRequestInvalid) {
 			// 构造请求出错，直接退出。
 			return err
 		} else if errors.Is(err, ErrNodeMasterExisted) {
 			// 主节点已存在，设置自己为从节点。
-			return n.startSlave(master, nil)
+			return n.startSlave(ctx, master, nil)
 		} else if err != nil {
 			log.Println(err)
 			return err
 		}
 		// 未出错时启动主节点模式。
-		return n.startSlave(master, nil)
+		return n.startSlave(ctx, master, nil)
 	}
 	return nil
 }
@@ -218,14 +248,14 @@ func (n *Pool) Start(identity int) error {
 // 1. 若自己是 Master，则通知所有从节点停机或选择一个从节点并通知其接替自己。
 // 2. 若自己是 Slave，则通知主节点自己停机。
 // 3. 若身份未定，不做任何动作。
-func (n *Pool) Stop() {
+func (n *Pool) Stop(ctx context.Context) {
 	if n.IsIdentityNotDetermined() {
 		return
 	}
 	if n.IsIdentityMaster() {
-		n.stopMaster()
+		n.stopMaster(ctx)
 	}
 	if n.IsIdentitySlave() {
-		n.stopSlave()
+		n.stopSlave(ctx)
 	}
 }
