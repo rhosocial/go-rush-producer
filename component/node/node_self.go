@@ -2,9 +2,10 @@ package node
 
 import (
 	"errors"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
 	"log"
 	"net/http"
+
+	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type PoolSelf struct {
@@ -38,15 +39,15 @@ var ErrNodeMasterExisted = errors.New("a valid master node with the same socket 
 // 1. 如果相同，则认为是自己，报 ErrNodeMasterIsSelf。
 //
 // 2. 如果不同，则认为主节点是另一个进程。尝试与其沟通，参见 CheckMasterWithRequest。
-func (ps *PoolSelf) CheckMaster(master *models.NodeInfo) error {
+func (n *Pool) CheckMaster(master *models.NodeInfo) error {
 	if master == nil {
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid
 	}
-	if ps.Node.IsSocketEqual(master) {
+	if n.Self.Node.IsSocketEqual(master) {
 		return ErrNodeMasterIsSelf
 	}
-	return ps.CheckMasterWithRequest(master)
+	return n.CheckMasterWithRequest(master)
 }
 
 // CheckMasterWithRequest 发送请求查询主节点状态。
@@ -60,20 +61,20 @@ func (ps *PoolSelf) CheckMaster(master *models.NodeInfo) error {
 // 3. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
 //
 // 其它情况没有任何错误。
-func (ps *PoolSelf) CheckMasterWithRequest(master *models.NodeInfo) error {
+func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
 	if master == nil {
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid
 	}
 	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
-	resp, err := SendRequestMasterStatus(master)
+	resp, err := n.SendRequestMasterStatus(master)
 	if err != nil {
 		log.Println(err)
 		return ErrNodeRequestInvalid
 	}
 	// 此时目标主节点网络正常。
 	// 若与自己套接字相同，则视为已存在。
-	if ps.Node.IsSocketEqual(master) {
+	if n.Self.Node.IsSocketEqual(master) {
 		return ErrNodeMasterExisted
 	}
 	if resp.StatusCode != http.StatusOK {

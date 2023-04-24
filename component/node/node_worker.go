@@ -11,11 +11,11 @@ type WorkerSlaveIntervals struct {
 }
 
 // worker 以"从节点"身份执行。
-func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, self *PoolSelf, master *PoolMaster) {
-	if self == nil {
+func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool, process func(nodes *Pool)) {
+	if nodes.Self.Node == nil {
 		return
 	}
-	if master == nil {
+	if nodes.Master.Node == nil {
 		return
 	}
 	for {
@@ -25,11 +25,18 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 			log.Println(context.Cause(ctx))
 			return
 		default:
-			err := self.CheckMaster(master.Node)
-			if err != nil {
-				log.Println(err)
-			}
+			process(nodes)
 		}
+	}
+}
+
+func workerSlaveCheckMaster(nodes *Pool) {
+	err := nodes.CheckMaster(nodes.Master.Node)
+	if err == nil {
+		nodes.Master.RetryClear()
+	} else {
+		nodes.Master.RetryUp()
+		log.Println(err)
 	}
 }
 
@@ -37,7 +44,8 @@ type WorkerMasterIntervals struct {
 	Base uint16 `json:"base"`
 }
 
-func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals) {
+// worker 以"主节点"身份执行。
+func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals, nodes *Pool, process func(nodes *Pool)) {
 	for {
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
@@ -45,7 +53,13 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 			log.Println(context.Cause(ctx))
 			return
 		default:
-			//process(ctx)
+			process(nodes)
 		}
+	}
+}
+
+func workerMasterCheckSlaves(nodes *Pool) {
+	for i, _ := range nodes.Slaves.Nodes {
+		nodes.Slaves.RetryUp(i)
 	}
 }

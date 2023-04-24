@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ const (
 
 	RequestHeaderXAuthorizationTokenKey   = "X-Authorization-Token"
 	RequestHeaderXAuthorizationTokenValue = "$2a$04$jajGD06BJd.KmTM7pgCRzeFSIMWLAUbTCOQPNJRDMnMltPZp3tK1y"
+	RequestHeaderXNodeIDKey               = "X-Node-ID"
 )
 
 // ------ MasterStatus ------ //
@@ -47,11 +49,11 @@ const (
 // 如果已经是最高级，则报 models.ErrNodeLevelAlreadyHighest。
 // 如果构建请求出错，则据实返回，此时第一个返回值为空。
 // 请求构建成功，则发送请求，超时固定设为 1 秒。并返回响应和对应的错误。
-func SendRequestMasterStatus(master *models.NodeInfo) (*http.Response, error) {
+func (n *Pool) SendRequestMasterStatus(master *models.NodeInfo) (*http.Response, error) {
 	if master == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	req, err := PrepareNodeRequest(RequestMethodMasterStatus, RequestURLFormatMasterStatus, master.Socket(), nil, "")
+	req, err := n.PrepareNodeRequest(RequestMethodMasterStatus, RequestURLFormatMasterStatus, master.Socket(), nil, "")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -89,7 +91,7 @@ func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 		NodeVersion: n.Self.Node.NodeVersion,
 	}
 	var body = strings.NewReader(self.Encode())
-	req, err := PrepareNodeRequest(RequestMethodMasterNotifyAdd, RequestURLFormatMasterNotifyAdd, n.Master.Node.Socket(), body, "application/x-www-form-urlencoded")
+	req, err := n.PrepareNodeRequest(RequestMethodMasterNotifyAdd, RequestURLFormatMasterNotifyAdd, n.Master.Node.Socket(), body, "application/x-www-form-urlencoded")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -118,7 +120,7 @@ func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 		NodeVersion: n.Self.Node.NodeVersion,
 	}
 	query := fmt.Sprintf("?id=%d&%s", n.Self.Node.ID, fresh.Encode())
-	req, err := PrepareNodeRequest(RequestMethodMasterNotifyDelete, RequestURLFormatMasterNotifyDelete+query, n.Master.Node.Socket(), nil, "")
+	req, err := n.PrepareNodeRequest(RequestMethodMasterNotifyDelete, RequestURLFormatMasterNotifyDelete+query, n.Master.Node.Socket(), nil, "")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -146,7 +148,7 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	if slave == nil {
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
-	req, err := PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatSlaveStatus, slave.Socket(), nil, "")
+	req, err := n.PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatSlaveStatus, slave.Socket(), nil, "")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -161,10 +163,13 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 // PrepareNodeRequest 准备节点间通信请求。
 // 准备请求过程中产生错误将如实返回。
 // 建议用法：调用该函数获取到错误时，不向上继续反馈，而统一报 ErrNodeRequestInvalid 错误。并出错原因记录到日志。
-func PrepareNodeRequest(method string, urlFormat string, socket string, body io.Reader, contentType string) (*http.Request, error) {
+func (n *Pool) PrepareNodeRequest(method string, urlFormat string, socket string, body io.Reader, contentType string) (*http.Request, error) {
 	URL := fmt.Sprintf(urlFormat, socket)
 	req, err := http.NewRequest(method, URL, body)
 	req.Header.Add(RequestHeaderXAuthorizationTokenKey, RequestHeaderXAuthorizationTokenValue)
+	if n != nil && n.Self.Node.ID != 0 {
+		req.Header.Add(RequestHeaderXNodeIDKey, strconv.FormatUint(n.Self.Node.ID, 10))
+	}
 	if len(contentType) > 0 {
 		req.Header.Add("Content-Type", contentType)
 	}

@@ -2,40 +2,22 @@ package node
 
 import (
 	"context"
-	"errors"
+	"math"
 	"sync"
 
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type PoolSlaves struct {
-	Nodes                  map[uint64]*models.NodeInfo
-	NodesRWMutex           sync.RWMutex
+	NodesRWLock sync.RWMutex
+	Nodes       map[uint64]*models.NodeInfo
+	NodesRetry  map[uint64]uint8
+
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
 }
 
 // ---- Worker ---- //
-
-func (ps *PoolSlaves) Start(ctx context.Context, self *PoolSelf, master *PoolMaster) {
-	ps.WorkerCancelFuncRWLock.Lock()
-	defer ps.WorkerCancelFuncRWLock.Unlock()
-	if ps.IsWorking() {
-		return
-	}
-	ctxChild, cancel := context.WithCancelCause(ctx)
-	ps.WorkerCancelFunc = cancel
-	go ps.worker(ctxChild, WorkerSlaveIntervals{
-		Base: 1000,
-	}, self, master)
-}
-
-func (ps *PoolSlaves) Stop() {
-	ps.WorkerCancelFuncRWLock.Lock()
-	defer ps.WorkerCancelFuncRWLock.Unlock()
-	ps.WorkerCancelFunc(errors.New("stop"))
-	ps.WorkerCancelFunc = nil
-}
 
 func (ps *PoolSlaves) IsWorking() bool {
 	return ps.WorkerCancelFunc != nil
@@ -44,12 +26,52 @@ func (ps *PoolSlaves) IsWorking() bool {
 // ---- Worker ---- //
 
 func (ps *PoolSlaves) Get(id uint64) *models.NodeInfo {
+	if ps.NodesRetry == nil {
+		ps.NodesRetry = make(map[uint64]uint8)
+	}
 	return ps.Nodes[id]
 }
 
+// RetryUp 尝试次数递增。
+func (ps *PoolSlaves) RetryUp(id uint64) uint8 {
+	retry := ps.GetRetry(id)
+	if retry == math.MaxUint8 { // 如果已经达到最大值，则不再增大。
+		return retry
+	}
+	ps.NodesRetry[id] += 1
+	return ps.NodesRetry[id]
+}
+
+// RetryDown 尝试次数递减。
+func (ps *PoolSlaves) RetryDown(id uint64) uint8 {
+	retry := ps.GetRetry(id)
+	if retry == 0 { // 如果已经达到最小值，则不再减小。
+		return retry
+	}
+	ps.NodesRetry[id] -= 1
+	return ps.NodesRetry[id]
+}
+
+// RetryClear 尝试次数清空。
+func (ps *PoolSlaves) RetryClear(id uint64) {
+	if ps.NodesRetry == nil {
+		ps.NodesRetry = make(map[uint64]uint8)
+	}
+	ps.NodesRetry[id] = 0
+}
+
+// GetRetry 获取重试次数。
+func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
+	if ps.NodesRetry == nil {
+		ps.NodesRetry = make(map[uint64]uint8)
+	}
+	ps.RetryClear(id)
+	return 0
+}
+
 func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
-	ps.NodesRWMutex.RLock()
-	defer ps.NodesRWMutex.RUnlock()
+	ps.NodesRWLock.RLock()
+	defer ps.NodesRWLock.RUnlock()
 
 	slaves := make(map[uint64]*models.RegisteredNodeInfo)
 	for i, v := range ps.Nodes {
@@ -63,8 +85,8 @@ func (ps *PoolSlaves) AddSlaveNode(slave *models.NodeInfo) bool {
 	if slave == nil {
 		return false
 	}
-	ps.NodesRWMutex.Lock()
-	defer ps.NodesRWMutex.Unlock()
+	ps.NodesRWLock.Lock()
+	defer ps.NodesRWLock.Unlock()
 	ps.Nodes[slave.ID] = slave
 	return true
 }

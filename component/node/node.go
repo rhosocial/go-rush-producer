@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net"
@@ -114,8 +115,8 @@ func (n *Pool) CommitSelfAsMasterNode() (bool, error) {
 // AcceptSlave 接受从节点。
 func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error) {
 	log.Println(node.Log())
-	n.Slaves.NodesRWMutex.Lock()
-	defer n.Slaves.NodesRWMutex.Unlock()
+	n.Slaves.NodesRWLock.Lock()
+	defer n.Slaves.NodesRWLock.Unlock()
 	// 检查 n.Slaves 是否存在该节点。
 	// 如果存在，则直接返回。
 	n.RefreshSlavesNodeInfo()
@@ -153,8 +154,8 @@ func (n *Pool) AcceptMaster(master *models.NodeInfo) {
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
 func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
 	log.Printf("Remove Slave: %d\n", id)
-	n.Slaves.NodesRWMutex.Lock()
-	defer n.Slaves.NodesRWMutex.Unlock()
+	n.Slaves.NodesRWLock.Lock()
+	defer n.Slaves.NodesRWLock.Unlock()
 	slave, err := n.Slaves.Check(id, fresh)
 	if err != nil {
 		return false, err
@@ -171,8 +172,8 @@ func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error)
 func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 	remaining := make([]uint64, 0)
 	removed := make([]uint64, 0)
-	n.Slaves.NodesRWMutex.Lock()
-	defer n.Slaves.NodesRWMutex.Unlock()
+	n.Slaves.NodesRWLock.Lock()
+	defer n.Slaves.NodesRWLock.Unlock()
 	for i, slave := range n.Slaves.Nodes {
 		if _, err := n.GetSlaveStatus(i); err != nil {
 			n.Self.Node.RemoveSlaveNode(slave)
@@ -193,3 +194,48 @@ func (n *Pool) RefreshSlavesNodeInfo() {
 	}
 	n.Slaves.Refresh(nodes)
 }
+
+// ---- Worker ---- //
+
+func (n *Pool) StartMasterWorker(ctx context.Context) {
+	n.Master.WorkerCancelFuncRWLock.Lock()
+	defer n.Master.WorkerCancelFuncRWLock.Unlock()
+	if n.Master.IsWorking() {
+		return
+	}
+	ctxChild, cancel := context.WithCancelCause(ctx)
+	n.Master.WorkerCancelFunc = cancel
+	go n.Master.worker(ctxChild, WorkerMasterIntervals{
+		Base: 1000,
+	}, n, workerMasterCheckSlaves)
+}
+
+func (n *Pool) StopMasterWorker() {
+	n.Master.WorkerCancelFuncRWLock.Lock()
+	defer n.Master.WorkerCancelFuncRWLock.Unlock()
+	n.Master.WorkerCancelFunc(errors.New("stop"))
+	n.Master.WorkerCancelFunc = nil
+}
+
+func (n *Pool) StartSlavesWorker(ctx context.Context) {
+	n.Slaves.WorkerCancelFuncRWLock.Lock()
+	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
+	if n.Slaves.IsWorking() {
+		// 已经启动了
+		return
+	}
+	ctxChild, cancel := context.WithCancelCause(ctx)
+	n.Slaves.WorkerCancelFunc = cancel
+	go n.Slaves.worker(ctxChild, WorkerSlaveIntervals{
+		Base: 1000,
+	}, n, workerSlaveCheckMaster)
+}
+
+func (n *Pool) StopSlavesWorker() {
+	n.Slaves.WorkerCancelFuncRWLock.Lock()
+	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
+	n.Slaves.WorkerCancelFunc(errors.New("stop"))
+	n.Slaves.WorkerCancelFunc = nil
+}
+
+// ---- Worker ---- //

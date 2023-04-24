@@ -61,7 +61,7 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error
 	}
 	if node, err := n.Self.Node.GetSuperiorNode(specifySuperior); err == nil {
 		log.Print("Discovered master: ", node.Log())
-		err = n.Self.CheckMaster(node)
+		err = n.CheckMaster(node)
 		return node, err
 	} else {
 		log.Println("Error(s) reported when discovering master record: ", err)
@@ -103,6 +103,7 @@ func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err err
 	if isMasterFresh {
 		n.Self.Node.LogReportFreshMasterJoined()
 	}
+	n.StartMasterWorker(ctx)
 	return nil
 }
 
@@ -141,22 +142,13 @@ func (n *Pool) startSlave(ctx context.Context, master *models.NodeInfo, err erro
 		log.Fatalln(err)
 	}
 
-	n.Slaves.WorkerCancelFuncRWLock.Lock()
-	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
-	if n.Slaves.WorkerCancelFunc != nil {
-		// 已经启动了。
-	} else {
-		ctxChild, cancel := context.WithCancelCause(ctx)
-		n.Slaves.WorkerCancelFunc = cancel
-		go n.Slaves.worker(ctxChild, WorkerSlaveIntervals{
-			Base: 1000,
-		}, &n.Self, &n.Master)
-	}
+	n.StartSlavesWorker(ctx)
 
 	return nil
 }
 
 func (n *Pool) stopMaster(ctx context.Context) error {
+	n.StopMasterWorker()
 	n.SwitchIdentityMasterOff()
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// TODO: 通知从节点接替以及其它从节点切换主节点
@@ -167,18 +159,10 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 }
 
 func (n *Pool) stopSlave(ctx context.Context) error {
+	n.StopSlavesWorker()
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
 	n.NotifyMasterToRemoveSelf()
-
-	n.Slaves.WorkerCancelFuncRWLock.Lock()
-	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
-	if n.Slaves.WorkerCancelFunc == nil {
-		// 未启动。
-	} else {
-		n.Slaves.WorkerCancelFunc(errors.New("stop"))
-		n.Slaves.WorkerCancelFunc = nil
-	}
 	return nil
 }
 

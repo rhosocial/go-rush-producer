@@ -2,7 +2,7 @@ package node
 
 import (
 	"context"
-	"errors"
+	"math"
 	"sync"
 
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -12,26 +12,7 @@ type PoolMaster struct {
 	Node                   *models.NodeInfo
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
-}
-
-func (pm *PoolMaster) Start(ctx context.Context) {
-	pm.WorkerCancelFuncRWLock.Lock()
-	defer pm.WorkerCancelFuncRWLock.Unlock()
-	if pm.IsWorking() {
-		return
-	}
-	ctxChild, cancel := context.WithCancelCause(ctx)
-	pm.WorkerCancelFunc = cancel
-	go pm.worker(ctxChild, WorkerMasterIntervals{
-		Base: 1000,
-	})
-}
-
-func (pm *PoolMaster) Stop() {
-	pm.WorkerCancelFuncRWLock.Lock()
-	defer pm.WorkerCancelFuncRWLock.Unlock()
-	pm.WorkerCancelFunc(errors.New("stop"))
-	pm.WorkerCancelFunc = nil
+	Retry                  uint8
 }
 
 func (pm *PoolMaster) IsWorking() bool {
@@ -40,4 +21,27 @@ func (pm *PoolMaster) IsWorking() bool {
 
 func (pm *PoolMaster) Accept(master *models.NodeInfo) {
 	pm.Node = master
+}
+
+// RetryUp 尝试次数递增。
+func (pm *PoolMaster) RetryUp() uint8 {
+	if pm.Retry == math.MaxUint8 { // 如果已经达到最大值，则不再增大。
+		return pm.Retry
+	}
+	pm.Retry += 1
+	return pm.Retry
+}
+
+// RetryDown 尝试次数递减。
+func (pm *PoolMaster) RetryDown() uint8 {
+	if pm.Retry == 0 { // 如果已经达到最小值，则不再减小。
+		return 0
+	}
+	pm.Retry -= 1
+	return pm.Retry
+}
+
+// RetryClear 尝试次数清空。
+func (pm *PoolMaster) RetryClear() {
+	pm.Retry = 0
 }
