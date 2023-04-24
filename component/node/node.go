@@ -111,20 +111,7 @@ func (n *Pool) CommitSelfAsMasterNode() (bool, error) {
 	}
 }
 
-func (n *Pool) AcceptMaster(node *models.NodeInfo) {
-	n.Master.Node = node
-	n.Self.SetLevel(n.Master.Node.Level + 1)
-}
-
-func (n *Pool) CheckSlaveNodeIfExists(node *models.FreshNodeInfo) *models.NodeInfo {
-	for id, _ := range n.Slaves.Nodes {
-		if slave, err := n.Slaves.Check(id, node); err == nil {
-			return slave
-		}
-	}
-	return nil
-}
-
+// AcceptSlave 接受从节点。
 func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error) {
 	log.Println(node.Log())
 	n.Slaves.NodesRWMutex.Lock()
@@ -132,7 +119,7 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error)
 	// 检查 n.Slaves 是否存在该节点。
 	// 如果存在，则直接返回。
 	n.RefreshSlavesNodeInfo()
-	if slave := n.CheckSlaveNodeIfExists(node); slave != nil {
+	if slave := n.Slaves.CheckIfExists(node); slave != nil {
 		log.Println("The specified slave node record already exists.")
 		return slave, nil
 	}
@@ -151,6 +138,12 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error)
 	n.Slaves.Nodes[slave.ID] = &slave
 	n.Self.Node.LogReportFreshSlaveJoined(&slave)
 	return &slave, nil
+}
+
+// AcceptMaster 接受主节点。
+func (n *Pool) AcceptMaster(master *models.NodeInfo) {
+	n.Master.Accept(master)
+	n.Self.SetLevel(n.Master.Node.Level + 1)
 }
 
 // RemoveSlave 删除指定节点。删除前要校验客户端提供的信息。若未报错，则视为删除成功。
@@ -174,6 +167,7 @@ func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error)
 	return true, nil
 }
 
+// RefreshSlavesStatus 刷新从节点状态。
 func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 	remaining := make([]uint64, 0)
 	removed := make([]uint64, 0)

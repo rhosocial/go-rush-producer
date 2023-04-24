@@ -104,3 +104,12 @@ func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*models.Nod
 	}
 	return nil, ErrNodeSlaveFreshNodeInfoInvalid
 }
+
+func (ps *PoolSlaves) CheckIfExists(fresh *models.FreshNodeInfo) *models.NodeInfo {
+	for id, _ := range ps.Nodes {
+		if slave, err := ps.Check(id, fresh); err == nil {
+			return slave
+		}
+	}
+	return nil
+}
