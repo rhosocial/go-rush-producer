@@ -163,6 +163,14 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 	return true, nil
 }
 
+// RemoveSelf 删除自己。
+func (m *NodeInfo) RemoveSelf() (bool, error) {
+	if tx := NodeInfoDB.Delete(m); tx.Error != nil {
+		return false, tx.Error
+	}
+	return true, nil
+}
+
 func (n *FreshNodeInfo) Encode() string {
 	params := make(url.Values)
 	params.Add("name", n.Name)

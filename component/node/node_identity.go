@@ -73,12 +73,12 @@ func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err err
 	isMasterFresh := false
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 什么也不做
-	} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
+	} else if errors.Is(err, models.ErrNodeSuperiorNotExist) || errors.Is(err, ErrNodeRequestResponseError) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
-		result, _ := n.CommitSelfAsMasterNode()
-		if result {
-			isMasterFresh = true
+		if !n.CommitSelfAsMasterNode() {
+			return models.ErrNodeDatabaseError
 		}
+		isMasterFresh = true
 	} else if errors.Is(err, models.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
 		return err
@@ -90,6 +90,8 @@ func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err err
 	} else if errors.Is(err, ErrNodeRequestInvalid) {
 		// 构造请求出错，直接退出。
 		return err
+		// } else if errors.Is(err, ErrNodeRequestResponseError) {
+		// 删除失效信息。
 	} else if errors.Is(err, ErrNodeMasterExisted) {
 		// 主节点已存在，直接退出。
 		return err
@@ -214,6 +216,10 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		} else if errors.Is(err, ErrNodeRequestInvalid) {
 			// 构造请求出错，直接退出。
 			return err
+		} else if errors.Is(err, ErrNodeRequestResponseError) {
+			// 请求响应失败，将自己作为主。将异常节点删除。
+			master.RemoveSelf()
+			return n.startMaster(ctx, n.Self.Node, ErrNodeRequestResponseError)
 		} else if errors.Is(err, ErrNodeMasterExisted) {
 			// 主节点已存在，设置自己为从节点。
 			return n.startSlave(ctx, master, nil)

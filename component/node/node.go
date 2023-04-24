@@ -102,13 +102,14 @@ func NewNodePool(self *models.NodeInfo) *Pool {
 
 var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info")
 
-func (n *Pool) CommitSelfAsMasterNode() (bool, error) {
-	n.Self.Downgrade()
+func (n *Pool) CommitSelfAsMasterNode() bool {
+	n.Self.Upgrade()
 	if _, err := n.Self.Node.CommitSelfAsMasterNode(); err == nil {
 		n.Master.Node = n.Self.Node
-		return true, nil
+		return true
 	} else {
-		return false, nil
+		log.Println(err)
+		return false
 	}
 }
 

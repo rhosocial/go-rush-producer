@@ -139,6 +139,7 @@ func (n *Pool) CheckResponseMasterNotifyDelete(response *http.Response, err erro
 
 var ErrNodeMasterDoesNotHaveSpecifiedSlave = errors.New("the specified slave node does not exist on the current master node")
 var ErrNodeRequestInvalid = errors.New("invalid node request")
+var ErrNodeRequestResponseError = errors.New("node request response error")
 
 // ------ SlaveGetStatus ------ //
 

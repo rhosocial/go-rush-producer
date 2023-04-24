@@ -17,11 +17,11 @@ func (ps *PoolSelf) SetLevel(level uint8) {
 	ps.Node.Level = level
 }
 
-func (ps *PoolSelf) Downgrade() {
+func (ps *PoolSelf) Upgrade() {
 	ps.Node.Level -= 1
 }
 
-func (ps *PoolSelf) Upgrade() {
+func (ps *PoolSelf) Downgrade() {
 	ps.Node.Level += 1
 }
 
@@ -56,9 +56,11 @@ func (n *Pool) CheckMaster(master *models.NodeInfo) error {
 //
 // 1. 如果请求构造出错，则报 ErrNodeRequestInvalid。
 //
-// 2. 如果 Socket 相同，则认为主节点已存在，报 ErrNodeMasterExisted。
+// 2. 如果请求构造成功，请求响应失败，则报 ErrNodeRequestResponseError。
 //
-// 3. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
+// 3. 如果 Socket 相同，则认为主节点已存在，报 ErrNodeMasterExisted。
+//
+// 4. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
 //
 // 其它情况没有任何错误。
 func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
@@ -68,9 +70,13 @@ func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
 	}
 	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
 	resp, err := n.SendRequestMasterStatus(master)
-	if err != nil {
+	if errors.Is(err, ErrNodeRequestInvalid) {
 		log.Println(err)
 		return ErrNodeRequestInvalid
+	}
+	if err != nil {
+		log.Println(err)
+		return ErrNodeRequestResponseError
 	}
 	// 此时目标主节点网络正常。
 	// 若与自己套接字相同，则视为已存在。
