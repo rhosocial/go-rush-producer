@@ -1,53 +1,29 @@
 package node
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"log"
 	"net"
-	"net/http"
-	"sync"
 
-	"github.com/rhosocial/go-rush-common/component/response"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type Pool struct {
-	Identity                     uint8
-	Master                       *models.NodeInfo
-	Self                         *models.NodeInfo
-	SlavesRWMutex                sync.RWMutex
-	Slaves                       map[uint64]models.NodeInfo
-	WorkerMasterCancelFunc       context.CancelCauseFunc
-	WorkerMasterCancelFuncRWLock sync.RWMutex
-	WorkerSlaveCancelFunc        context.CancelCauseFunc
-	WorkerSlaveCancelFuncRWLock  sync.RWMutex
-}
-
-// IsMasterWorking 判断主节点协程是否正在工作。
-func (n *Pool) IsMasterWorking() bool {
-	return n.WorkerMasterCancelFunc != nil
-}
-
-// IsSlaveWorking 判断主节点协程是否正在工作。
-func (n *Pool) IsSlaveWorking() bool {
-	return n.WorkerSlaveCancelFunc != nil
+	// Identity uint8
+	// Master                       *models.NodeInfo
+	// Self *models.NodeInfo
+	// SlavesRWMutex                sync.RWMutex
+	// Slaves                       map[uint64]models.NodeInfo
+	// WorkerMasterCancelFunc       context.CancelCauseFunc
+	// WorkerMasterCancelFuncRWLock sync.RWMutex
+	// WorkerSlaveCancelFunc        context.CancelCauseFunc
+	// WorkerSlaveCancelFuncRWLock  sync.RWMutex
+	Self   PoolSelf
+	Master PoolMaster
+	Slaves PoolSlaves
 }
 
 var Nodes *Pool
-
-func (n *Pool) GetRegisteredSlaveNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
-	n.SlavesRWMutex.RLock()
-	defer n.SlavesRWMutex.RUnlock()
-
-	slaves := make(map[uint64]*models.RegisteredNodeInfo)
-	for i, v := range n.Slaves {
-		slaves[i] = models.InitRegisteredWithModel(&v)
-	}
-	return &slaves
-}
 
 var ErrNetworkUnavailable = errors.New("network unavailable")
 
@@ -102,16 +78,22 @@ func (n *Pool) RefreshSelfSocket() error {
 	if err != nil {
 		return err
 	}
-	n.Self.Host = host.String()
+	n.Self.Node.Host = host.String()
 	return nil
 }
 
 func NewNodePool(self *models.NodeInfo) *Pool {
 	var nodes = Pool{
-		Identity: IdentityNotDetermined,
-		Master:   &models.NodeInfo{},
-		Self:     self,
-		Slaves:   make(map[uint64]models.NodeInfo),
+		// Identity: IdentityNotDetermined,
+		// Master:   &models.NodeInfo{},
+		// Self: self,
+		// Slaves:   make(map[uint64]models.NodeInfo),
+		Self: PoolSelf{
+			Identity: IdentityNotDetermined,
+			Node:     self,
+		},
+		Master: PoolMaster{},
+		Slaves: PoolSlaves{},
 	}
 	nodes.RefreshSelfSocket()
 	return &nodes
@@ -119,109 +101,24 @@ func NewNodePool(self *models.NodeInfo) *Pool {
 
 var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info")
 
-// CheckSlave 检查从节点是否有效。检查通过则返回节点信息 models.NodeInfo。
-//
-// 1. 若节点不存在，则报 ErrNodeMasterDoesNotHaveSpecifiedSlave。
-//
-// 2. 检查 FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
-func (n *Pool) CheckSlave(id uint64, fresh *models.FreshNodeInfo) (*models.NodeInfo, error) {
-	// 检查指定ID是否存在，如果不是，则报错。
-	slave, exist := n.Slaves[id]
-	if !exist {
-		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
-	}
-	// 再检查 FreshNodeInfo 是否相同。
-	origin := models.FreshNodeInfo{
-		Name:        slave.Name,
-		NodeVersion: slave.NodeVersion,
-		Host:        slave.Host,
-		Port:        slave.Port,
-	}
-	if origin.IsEqual(fresh) {
-		return &slave, nil
-	}
-	return nil, ErrNodeSlaveFreshNodeInfoInvalid
-}
-
 func (n *Pool) CommitSelfAsMasterNode() (bool, error) {
-	n.Self.Level = n.Self.Level - 1
-	if _, err := n.Self.CommitSelfAsMasterNode(); err == nil {
-		n.Master = n.Self
+	n.Self.Downgrade()
+	if _, err := n.Self.Node.CommitSelfAsMasterNode(); err == nil {
+		n.Master.Node = n.Self.Node
 		return true, nil
 	} else {
 		return false, nil
 	}
 }
 
-var ErrNodeMasterInvalid = errors.New("master node invalid")
-var ErrNodeMasterValidButRefused = errors.New("master is valid but refuse to communicate")
-
-var ErrNodeMasterIsSelf = errors.New("master node is self")
-var ErrNodeMasterExisted = errors.New("a valid master node with the same socket already exists")
-
-// CheckMaster 检查主节点有效性。如果有效，则返回 nil。
-// 如果指定主节点不存在，则报 ErrNodeMasterInvalid。
-//
-// 判断 master 的套接字是否与自己相同。
-//
-// 1. 如果相同，则认为是自己，报 ErrNodeMasterIsSelf。
-//
-// 2. 如果不同，则认为主节点是另一个进程。尝试与其沟通，参见 CheckMasterWithRequest。
-func (n *Pool) CheckMaster(master *models.NodeInfo) error {
-	if master == nil {
-		log.Println("Master not specified")
-		return ErrNodeMasterInvalid
-	}
-	if n.Self.IsSocketEqual(master) {
-		return ErrNodeMasterIsSelf
-	}
-	return n.CheckMasterWithRequest(master)
-}
-
-// CheckMasterWithRequest 发送请求查询主节点状态。
-//
-// 如果指定主节点不存在，则报 ErrNodeMasterInvalid。
-//
-// 1. 如果请求构造出错，则报 ErrNodeRequestInvalid。
-//
-// 2. 如果 Socket 相同，则认为主节点已存在，报 ErrNodeMasterExisted。
-//
-// 3. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
-//
-// 其它情况没有任何错误。
-func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
-	if master == nil {
-		log.Println("Master not specified")
-		return ErrNodeMasterInvalid
-	}
-	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
-	resp, err := SendRequestMasterStatus(master)
-	if err != nil {
-		log.Println(err)
-		return ErrNodeRequestInvalid
-	}
-	// 此时目标主节点网络正常。
-	// 若与自己套接字相同，则视为已存在。
-	if n.Self.IsSocketEqual(master) {
-		return ErrNodeMasterExisted
-	}
-	if resp.StatusCode != http.StatusOK {
-		var body = make([]byte, resp.ContentLength)
-		resp.Body.Read(body)
-		log.Println(string(body))
-		return ErrNodeMasterValidButRefused
-	}
-	return nil
-}
-
 func (n *Pool) AcceptMaster(node *models.NodeInfo) {
-	n.Master = node
-	n.Self.Level = n.Master.Level + 1
+	n.Master.Node = node
+	n.Self.SetLevel(n.Master.Node.Level + 1)
 }
 
 func (n *Pool) CheckSlaveNodeIfExists(node *models.FreshNodeInfo) *models.NodeInfo {
-	for id, _ := range n.Slaves {
-		if slave, err := n.CheckSlave(id, node); err == nil {
+	for id, _ := range n.Slaves.Nodes {
+		if slave, err := n.Slaves.Check(id, node); err == nil {
 			return slave
 		}
 	}
@@ -230,8 +127,8 @@ func (n *Pool) CheckSlaveNodeIfExists(node *models.FreshNodeInfo) *models.NodeIn
 
 func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error) {
 	log.Println(node.Log())
-	n.SlavesRWMutex.Lock()
-	defer n.SlavesRWMutex.Unlock()
+	n.Slaves.NodesRWMutex.Lock()
+	defer n.Slaves.NodesRWMutex.Unlock()
 	// 检查 n.Slaves 是否存在该节点。
 	// 如果存在，则直接返回。
 	n.RefreshSlavesNodeInfo()
@@ -247,45 +144,45 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error)
 		Port:        node.Port,
 	}
 	// 需要判断数据库中是否存在该条目。
-	_, err := n.Self.AddSlaveNode(&slave)
+	_, err := n.Self.Node.AddSlaveNode(&slave)
 	if err != nil {
 		return nil, err
 	}
-	n.Slaves[slave.ID] = slave
-	n.Self.LogReportFreshSlaveJoined(&slave)
+	n.Slaves.Nodes[slave.ID] = &slave
+	n.Self.Node.LogReportFreshSlaveJoined(&slave)
 	return &slave, nil
 }
 
 // RemoveSlave 删除指定节点。删除前要校验客户端提供的信息。若未报错，则视为删除成功。
 //
-// 1. 检查节点是否有效。检查流程参见 CheckSlave。
+// 1. 检查节点是否有效。检查流程参见 Slaves.Check。
 //
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
 func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
 	log.Printf("Remove Slave: %d\n", id)
-	n.SlavesRWMutex.Lock()
-	defer n.SlavesRWMutex.Unlock()
-	slave, err := n.CheckSlave(id, fresh)
+	n.Slaves.NodesRWMutex.Lock()
+	defer n.Slaves.NodesRWMutex.Unlock()
+	slave, err := n.Slaves.Check(id, fresh)
 	if err != nil {
 		return false, err
 	}
-	if _, err := n.Self.RemoveSlaveNode(slave); err != nil {
+	if _, err := n.Self.Node.RemoveSlaveNode(slave); err != nil {
 		return false, err
 	}
-	delete(n.Slaves, id)
-	n.Self.LogReportExistedSlaveWithdrawn(slave)
+	delete(n.Slaves.Nodes, id)
+	n.Self.Node.LogReportExistedSlaveWithdrawn(slave)
 	return true, nil
 }
 
 func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 	remaining := make([]uint64, 0)
 	removed := make([]uint64, 0)
-	n.SlavesRWMutex.Lock()
-	defer n.SlavesRWMutex.Unlock()
-	for i, slave := range n.Slaves {
+	n.Slaves.NodesRWMutex.Lock()
+	defer n.Slaves.NodesRWMutex.Unlock()
+	for i, slave := range n.Slaves.Nodes {
 		if _, err := n.GetSlaveStatus(i); err != nil {
-			n.Self.RemoveSlaveNode(&slave)
-			delete(n.Slaves, i)
+			n.Self.Node.RemoveSlaveNode(slave)
+			delete(n.Slaves.Nodes, i)
 			removed = append(removed, i)
 		} else {
 			remaining = append(remaining, i)
@@ -294,104 +191,11 @@ func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 	return remaining, removed
 }
 
-// GetSlaveStatus 当前节点（主节点）获取其从节点状态。
-func (n *Pool) GetSlaveStatus(id uint64) (bool, error) {
-	resp, err := n.SendRequestSlaveStatus(id)
-	if err != nil {
-		return false, err
-	}
-	var body = make([]byte, resp.ContentLength)
-	_, err = resp.Body.Read(body)
-	if err != io.EOF && err != nil {
-		return false, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return false, errors.New(string(body))
-	}
-	return true, nil
-}
-
-type NotifyMasterToAddSelfAsSlaveResponseData struct {
-	ID          uint64 `json:"id"`
-	Name        string `json:"name"`
-	NodeVersion string `json:"node_version"`
-	Host        string `json:"host"`
-	Port        uint16 `json:"port"`
-}
-
-type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSelfAsSlaveResponseData, any]
-
-// NotifyMasterToAddSelfAsSlave 当前节点（从节点）通知主节点添加自己为其从节点。
-func (n *Pool) NotifyMasterToAddSelfAsSlave() (bool, error) {
-	resp, err := n.SendRequestMasterToAddSelfAsSlave()
-	if err != nil {
-		return false, err
-	}
-	var body = make([]byte, resp.ContentLength)
-	_, err = resp.Body.Read(body)
-	if err != io.EOF && err != nil {
-		return false, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return false, errors.New(string(body))
-	}
-	respData := NotifyMasterToAddSelfAsSlaveResponse{}
-	err = json.Unmarshal(body, &respData)
-	if err != nil {
-		return false, err
-	}
-	// 校验成功，将返回的ID作为自己的ID。
-	self, err := models.GetNodeInfo(respData.Data.ID)
-	n.Self = self
-	return true, nil
-}
-
-// NotifyMasterToRemoveSelf 当前节点（从节点）通知主节点删除自己。
-func (n *Pool) NotifyMasterToRemoveSelf() (bool, error) {
-	resp, err := n.SendRequestMasterToRemoveSelf()
-	if err != nil {
-		return false, ErrNodeRequestInvalid
-	}
-	var body = make([]byte, resp.ContentLength)
-	_, err = resp.Body.Read(body)
-	if err != io.EOF && err != nil {
-		return false, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return false, errors.New(string(body))
-	}
-	return true, nil
-}
-
-// NotifySlaveToTakeoverSelf 当前节点（主节点）通知从节点接替自己。
-func (n *Pool) NotifySlaveToTakeoverSelf() (bool, error) {
-	return true, nil
-}
-
-func (n *Pool) NotifyAllSlavesToSwitchSuperior(succeedID uint64) (bool, error) {
-	return true, nil
-}
-
-func (n *Pool) NotifySlaveToSwitchSuperior() (bool, error) {
-	return true, nil
-}
-
-func (n *Pool) CheckSlavesStatus() {
-	n.SlavesRWMutex.Lock()
-	defer n.SlavesRWMutex.Unlock()
-}
-
 // RefreshSlavesNodeInfo 刷新从节点信息。
 func (n *Pool) RefreshSlavesNodeInfo() {
-	nodes, err := n.Self.GetAllSlaveNodes()
+	nodes, err := n.Self.Node.GetAllSlaveNodes()
 	if err != nil {
 		return
 	}
-	result := make(map[uint64]models.NodeInfo)
-	for _, node := range *nodes {
-		if true { // 访问节点是否有效。
-			result[node.ID] = node
-		}
-	}
-	n.Slaves = result
+	n.Slaves.Refresh(nodes)
 }

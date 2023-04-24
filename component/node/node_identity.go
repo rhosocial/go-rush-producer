@@ -18,31 +18,31 @@ const (
 var ErrNodeLevelAlreadyHighest = errors.New("I am already the highest level")
 
 func (n *Pool) SwitchIdentityMasterOn() {
-	n.Identity = n.Identity | IdentityMaster
+	n.Self.Identity = n.Self.Identity | IdentityMaster
 }
 
 func (n *Pool) SwitchIdentityMasterOff() {
-	n.Identity = n.Identity &^ IdentityMaster
+	n.Self.Identity = n.Self.Identity &^ IdentityMaster
 }
 
 func (n *Pool) SwitchIdentitySlaveOn() {
-	n.Identity = n.Identity | IdentitySlave
+	n.Self.Identity = n.Self.Identity | IdentitySlave
 }
 
 func (n *Pool) SwitchIdentitySlaveOff() {
-	n.Identity = n.Identity &^ IdentitySlave
+	n.Self.Identity = n.Self.Identity &^ IdentitySlave
 }
 
 func (n *Pool) IsIdentityMaster() bool {
-	return n.Identity&IdentityMaster > 0
+	return n.Self.Identity&IdentityMaster > 0
 }
 
 func (n *Pool) IsIdentitySlave() bool {
-	return n.Identity&IdentitySlave > 0
+	return n.Self.Identity&IdentitySlave > 0
 }
 
 func (n *Pool) IsIdentityNotDetermined() bool {
-	return n.Identity == IdentityNotDetermined
+	return n.Self.Identity == IdentityNotDetermined
 }
 
 // DiscoverMasterNode 发现主节点。返回发现的节点信息指针。
@@ -56,12 +56,12 @@ func (n *Pool) IsIdentityNotDetermined() bool {
 // 3. 如果存在主节点数据，则尝试检查主节点。参见 CheckMaster。
 func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error) {
 	log.Println("Discover master...")
-	if n.Self.Level == 0 {
+	if n.Self.Node.Level == 0 {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	if node, err := n.Self.GetSuperiorNode(specifySuperior); err == nil {
+	if node, err := n.Self.Node.GetSuperiorNode(specifySuperior); err == nil {
 		log.Print("Discovered master: ", node.Log())
-		err = n.CheckMaster(node)
+		err = n.Self.CheckMaster(node)
 		return node, err
 	} else {
 		log.Println("Error(s) reported when discovering master record: ", err)
@@ -97,11 +97,11 @@ func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err err
 		log.Println(err)
 		return err
 	}
-	n.Self = master
-	n.Master = n.Self
+	n.Self.Node = master
+	n.Master.Node = n.Self.Node
 	n.SwitchIdentityMasterOn()
 	if isMasterFresh {
-		n.Self.LogReportFreshMasterJoined()
+		n.Self.Node.LogReportFreshMasterJoined()
 	}
 	return nil
 }
@@ -141,16 +141,16 @@ func (n *Pool) startSlave(ctx context.Context, master *models.NodeInfo, err erro
 		log.Fatalln(err)
 	}
 
-	n.WorkerSlaveCancelFuncRWLock.Lock()
-	defer n.WorkerSlaveCancelFuncRWLock.Unlock()
-	if n.WorkerSlaveCancelFunc != nil {
+	n.Slaves.WorkerCancelFuncRWLock.Lock()
+	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
+	if n.Slaves.WorkerCancelFunc != nil {
 		// 已经启动了。
 	} else {
 		ctxChild, cancel := context.WithCancelCause(ctx)
-		n.WorkerSlaveCancelFunc = cancel
-		go n.workerSlave(ctxChild, WorkerSlaveIntervals{
+		n.Slaves.WorkerCancelFunc = cancel
+		go n.Slaves.worker(ctxChild, WorkerSlaveIntervals{
 			Base: 1000,
-		})
+		}, &n.Self, &n.Master)
 	}
 
 	return nil
@@ -162,7 +162,7 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 	// TODO: 通知从节点接替以及其它从节点切换主节点
 	n.NotifySlaveToTakeoverSelf()
 	n.NotifyAllSlavesToSwitchSuperior(uint64(0))
-	n.Self.LogReportExistedMasterWithdrawn()
+	n.Self.Node.LogReportExistedMasterWithdrawn()
 	return nil
 }
 
@@ -171,13 +171,13 @@ func (n *Pool) stopSlave(ctx context.Context) error {
 	// 通知主节点自己停机。
 	n.NotifyMasterToRemoveSelf()
 
-	n.WorkerSlaveCancelFuncRWLock.Lock()
-	defer n.WorkerSlaveCancelFuncRWLock.Unlock()
-	if n.WorkerSlaveCancelFunc == nil {
+	n.Slaves.WorkerCancelFuncRWLock.Lock()
+	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
+	if n.Slaves.WorkerCancelFunc == nil {
 		// 未启动。
 	} else {
-		n.WorkerSlaveCancelFunc(errors.New("stop"))
-		n.WorkerMasterCancelFunc = nil
+		n.Slaves.WorkerCancelFunc(errors.New("stop"))
+		n.Slaves.WorkerCancelFunc = nil
 	}
 	return nil
 }
@@ -217,7 +217,7 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 			return n.startMaster(ctx, master, err)
 		} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 			// 主节点不存在，设置自己为主节点。
-			return n.startMaster(ctx, n.Self, models.ErrNodeSuperiorNotExist)
+			return n.startMaster(ctx, n.Self.Node, models.ErrNodeSuperiorNotExist)
 		} else if errors.Is(err, models.ErrNodeDatabaseError) {
 			// 数据库出错，直接退出。
 			return err

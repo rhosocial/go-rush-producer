@@ -71,20 +71,20 @@ func main() {
 	node.Nodes.Start(context.Background(), (*component.GlobalEnv).Identity)
 	defer node.Nodes.Stop(context.Background())
 	// For-loop
-	if node.Nodes.Identity == node.IdentityNotDetermined {
+	if node.Nodes.Self.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.
 		log.Println("Identity: Not determined.")
 	}
-	if node.Nodes.Identity == node.IdentityMaster {
+	if node.Nodes.Self.Identity == node.IdentityMaster {
 		// Start a goroutine to monitor its master.
 		log.Println("Identity: Master")
-		log.Printf("Self  : %s\n", node.Nodes.Self.Log())
+		log.Printf("Self  : %s\n", node.Nodes.Self.Node.Log())
 	}
-	if node.Nodes.Identity == node.IdentitySlave {
+	if node.Nodes.Self.Identity == node.IdentitySlave {
 		// Start a goroutine to monitor its slaves.
 		log.Println("Identity: Slave.")
-		log.Printf("Master: %s", node.Nodes.Master.Log())
-		log.Printf("Self  : %s", node.Nodes.Self.Log())
+		log.Printf("Master: %s", node.Nodes.Master.Node.Log())
+		log.Printf("Self  : %s", node.Nodes.Self.Node.Log())
 	}
 	r = gin.New()
 	if !configEngine(r) {

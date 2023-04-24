@@ -1,6 +1,7 @@
 package node
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -78,17 +79,17 @@ type RequestMasterStatusResponse = response.Generic[RequestMasterStatusResponseD
 
 // SendRequestMasterToAddSelfAsSlave 发送请求通知主节点添加自己为从节点。
 func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
-	if n.Master == nil {
+	if n.Master.Node == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
 	self := models.FreshNodeInfo{
-		Host:        n.Self.Host,
-		Port:        n.Self.Port,
-		Name:        n.Self.Name,
-		NodeVersion: n.Self.NodeVersion,
+		Host:        n.Self.Node.Host,
+		Port:        n.Self.Node.Port,
+		Name:        n.Self.Node.Name,
+		NodeVersion: n.Self.Node.NodeVersion,
 	}
 	var body = strings.NewReader(self.Encode())
-	req, err := PrepareNodeRequest(RequestMethodMasterNotifyAdd, RequestURLFormatMasterNotifyAdd, n.Master.Socket(), body, "application/x-www-form-urlencoded")
+	req, err := PrepareNodeRequest(RequestMethodMasterNotifyAdd, RequestURLFormatMasterNotifyAdd, n.Master.Node.Socket(), body, "application/x-www-form-urlencoded")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -107,17 +108,17 @@ func (n *Pool) CheckResponseMasterNotifyAdd(response *http.Response, err error) 
 // ------ MasterNotifyRemove ------ //
 
 func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
-	if n.Master == nil {
+	if n.Master.Node == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
 	fresh := models.FreshNodeInfo{
-		Host:        n.Self.Host,
-		Port:        n.Self.Port,
-		Name:        n.Self.Name,
-		NodeVersion: n.Self.NodeVersion,
+		Host:        n.Self.Node.Host,
+		Port:        n.Self.Node.Port,
+		Name:        n.Self.Node.Name,
+		NodeVersion: n.Self.Node.NodeVersion,
 	}
-	query := fmt.Sprintf("?id=%d&%s", n.Self.ID, fresh.Encode())
-	req, err := PrepareNodeRequest(RequestMethodMasterNotifyDelete, RequestURLFormatMasterNotifyDelete+query, n.Master.Socket(), nil, "")
+	query := fmt.Sprintf("?id=%d&%s", n.Self.Node.ID, fresh.Encode())
+	req, err := PrepareNodeRequest(RequestMethodMasterNotifyDelete, RequestURLFormatMasterNotifyDelete+query, n.Master.Node.Socket(), nil, "")
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -141,8 +142,8 @@ var ErrNodeRequestInvalid = errors.New("invalid node request")
 
 // SendRequestSlaveStatus 发送请求：获取指定ID从节点状态。
 func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
-	slave, exist := n.Slaves[id]
-	if !exist {
+	slave := n.Slaves.Get(id)
+	if slave == nil {
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
 	req, err := PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatSlaveStatus, slave.Socket(), nil, "")
@@ -176,5 +177,89 @@ func PrepareNodeRequest(method string, urlFormat string, socket string, body io.
 func ParseNodeRequestResponse[T1 interface{}, T2 interface{}](resp *http.Response) (bool, error) {
 	response.UnmarshalResponseBodyBaseWithDataAndExtension[T1, T2](resp)
 
+	return true, nil
+}
+
+// ---- TODO 待确认下述代码用途 ---- //
+
+// GetSlaveStatus 当前节点（主节点）获取其从节点状态。
+func (n *Pool) GetSlaveStatus(id uint64) (bool, error) {
+	resp, err := n.SendRequestSlaveStatus(id)
+	if err != nil {
+		return false, err
+	}
+	var body = make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
+	if err != io.EOF && err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New(string(body))
+	}
+	return true, nil
+}
+
+type NotifyMasterToAddSelfAsSlaveResponseData struct {
+	ID          uint64 `json:"id"`
+	Name        string `json:"name"`
+	NodeVersion string `json:"node_version"`
+	Host        string `json:"host"`
+	Port        uint16 `json:"port"`
+}
+
+type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSelfAsSlaveResponseData, any]
+
+// NotifyMasterToAddSelfAsSlave 当前节点（从节点）通知主节点添加自己为其从节点。
+func (n *Pool) NotifyMasterToAddSelfAsSlave() (bool, error) {
+	resp, err := n.SendRequestMasterToAddSelfAsSlave()
+	if err != nil {
+		return false, err
+	}
+	var body = make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
+	if err != io.EOF && err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New(string(body))
+	}
+	respData := NotifyMasterToAddSelfAsSlaveResponse{}
+	err = json.Unmarshal(body, &respData)
+	if err != nil {
+		return false, err
+	}
+	// 校验成功，将返回的ID作为自己的ID。
+	self, err := models.GetNodeInfo(respData.Data.ID)
+	n.Self.Node = self
+	return true, nil
+}
+
+// NotifyMasterToRemoveSelf 当前节点（从节点）通知主节点删除自己。
+func (n *Pool) NotifyMasterToRemoveSelf() (bool, error) {
+	resp, err := n.SendRequestMasterToRemoveSelf()
+	if err != nil {
+		return false, ErrNodeRequestInvalid
+	}
+	var body = make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
+	if err != io.EOF && err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New(string(body))
+	}
+	return true, nil
+}
+
+// NotifySlaveToTakeoverSelf 当前节点（主节点）通知从节点接替自己。
+func (n *Pool) NotifySlaveToTakeoverSelf() (bool, error) {
+	return true, nil
+}
+
+func (n *Pool) NotifyAllSlavesToSwitchSuperior(succeedID uint64) (bool, error) {
+	return true, nil
+}
+
+func (n *Pool) NotifySlaveToSwitchSuperior() (bool, error) {
 	return true, nil
 }
