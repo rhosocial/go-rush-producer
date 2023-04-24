@@ -12,9 +12,23 @@ type PoolSlaves struct {
 	NodesRWLock sync.RWMutex
 	Nodes       map[uint64]*models.NodeInfo
 	NodesRetry  map[uint64]uint8
+	NextTurn    uint
 
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
+}
+
+func (ps *PoolSlaves) Count() int {
+	return len(ps.Nodes)
+}
+
+func (ps *PoolSlaves) incTurn() {
+	ps.NextTurn += 1
+}
+
+func (ps *PoolSlaves) GetTurn() uint {
+	defer ps.incTurn()
+	return ps.NextTurn
 }
 
 // ---- Worker ---- //
@@ -92,14 +106,20 @@ func (ps *PoolSlaves) AddSlaveNode(slave *models.NodeInfo) bool {
 }
 
 // Refresh 刷新节点。
+// 刷新后会重新确定下一个顺序。
 func (ps *PoolSlaves) Refresh(nodes *[]models.NodeInfo) {
 	result := make(map[uint64]*models.NodeInfo)
+	turnMax := uint(0)
 	for _, node := range *nodes {
 		if true { // TODO: 判断节点是否有效。
 			result[node.ID] = &node
+			if node.Turn > turnMax {
+				turnMax = node.Turn
+			}
 		}
 	}
 	ps.Nodes = result
+	ps.NextTurn = turnMax + 1
 }
 
 // Check 检查从节点是否有效。检查通过则返回节点信息 models.NodeInfo。

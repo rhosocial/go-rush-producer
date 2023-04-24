@@ -150,6 +150,7 @@ func (n *Pool) startSlave(ctx context.Context, master *models.NodeInfo, err erro
 }
 
 func (n *Pool) stopMaster(ctx context.Context) error {
+	log.Println("stop master")
 	n.StopMasterWorker()
 	n.SwitchIdentityMasterOff()
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
@@ -161,6 +162,7 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 }
 
 func (n *Pool) stopSlave(ctx context.Context) error {
+	log.Println("stop slave")
 	n.StopSlavesWorker()
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。

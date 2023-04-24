@@ -52,6 +52,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 		NodeVersion: slave.NodeVersion,
 		Host:        slave.Host,
 		Port:        slave.Port,
+		Turn:        slave.Turn,
 	}
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", respData, host == r.ClientIP()))
 }

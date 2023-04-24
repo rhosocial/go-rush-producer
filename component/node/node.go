@@ -131,6 +131,7 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error)
 		NodeVersion: node.NodeVersion,
 		Host:        node.Host,
 		Port:        node.Port,
+		Turn:        n.Slaves.GetTurn(),
 	}
 	// 需要判断数据库中是否存在该条目。
 	_, err := n.Self.Node.AddSlaveNode(&slave)

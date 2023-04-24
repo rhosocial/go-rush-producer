@@ -211,6 +211,7 @@ type NotifyMasterToAddSelfAsSlaveResponseData struct {
 	NodeVersion string `json:"node_version"`
 	Host        string `json:"host"`
 	Port        uint16 `json:"port"`
+	Turn        uint   `json:"turn"`
 }
 
 type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSelfAsSlaveResponseData, any]
@@ -259,6 +260,10 @@ func (n *Pool) NotifyMasterToRemoveSelf() (bool, error) {
 
 // NotifySlaveToTakeoverSelf 当前节点（主节点）通知从节点接替自己。
 func (n *Pool) NotifySlaveToTakeoverSelf() (bool, error) {
+	if n.Slaves.Count() == 0 {
+		return true, nil
+	} // 如果没有从节点，则不必通知。
+
 	return true, nil
 }
 

@@ -22,7 +22,7 @@ type NodeInfo struct {
 	Port        uint16                 `gorm:"column:port;<-:create" json:"Port"`
 	Level       uint8                  `gorm:"column:level;<-:create" json:"Level"`
 	SuperiorID  uint64                 `gorm:"column:superior_id;<-create" json:"superior_id"`
-	Order       uint                   `gorm:"column:order;<-:create" json:"order"`
+	Turn        uint                   `gorm:"column:turn;<-:create" json:"turn"`
 	IsActive    uint8                  `gorm:"column:is_active;default:0" json:"is_active"`
 	CreatedAt   time.Time              `gorm:"column:created_at;autoCreateTime:milli" json:"created_at"`
 	UpdatedAt   time.Time              `gorm:"column:updated_at;autoUpdateTime:milli" json:"updated_at"`
@@ -44,7 +44,7 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 		Port:        m.Port,
 		Level:       m.Level,
 		SuperiorID:  m.SuperiorID,
-		Order:       m.Order,
+		Turn:        m.Turn,
 		IsActive:    m.IsActive,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
@@ -60,7 +60,7 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 type FreshNodeInfo struct {
 	Name        string `form:"name" json:"name" binding:"required"`
 	NodeVersion string `form:"node_version" json:"node_version" binding:"required"`
-	Host        string `form:"host" json:"string" binding:"required"`
+	Host        string `form:"host" json:"host" binding:"required"`
 	Port        uint16 `form:"port" json:"port" binding:"required"`
 }
 
@@ -70,6 +70,6 @@ type RegisteredNodeInfo struct {
 	ID         uint64 `json:"id" binding:"required"`
 	Level      uint8  `json:"level" binding:"required"`
 	SuperiorID uint64 `json:"superior_id" binding:"required"`
-	Order      uint   `json:"order" binding:"required"`
+	Turn       uint   `json:"turn" binding:"required"`
 	IsActive   uint8  `json:"is_active" binding:"required"`
 }

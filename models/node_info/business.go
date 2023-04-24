@@ -42,10 +42,10 @@ func (m *NodeInfo) Socket() string {
 }
 
 func (m *NodeInfo) Log() string {
-	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%-5d | Superior: %10d | Level: %3d | Order: %3d | Active: %d\n",
+	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%-5d | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
 		m.ID,
 		m.Host, m.Port,
-		m.SuperiorID, m.Level, m.Order, m.IsActive,
+		m.SuperiorID, m.Level, m.Turn, m.IsActive,
 	)
 }
 
@@ -113,11 +113,10 @@ func (m *NodeInfo) GetAllActiveSlaveNodes() (*[]NodeInfo, error) {
 // AddSlaveNode 添加从节点信息到数据库。
 // 从节点的上级节点为当前节点。
 // 从节点的 Level 为当前节点 + 1。
-// 从节点的 Order 为当前所有节点最大 Order + 1。如果没有从节点，则默认为 1。
+// 从节点的 Turn 为当前所有节点最大 Turn + 1。如果没有从节点，则默认为 1。
 func (m *NodeInfo) AddSlaveNode(n *NodeInfo) (bool, error) {
 	n.SuperiorID = m.ID
 	n.Level = m.Level + 1
-	n.Order = 0
 	if tx := NodeInfoDB.Create(n); tx.Error != nil {
 		return false, tx.Error
 	}
@@ -133,7 +132,7 @@ func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
 
 func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
 	m.Level = master.Level
-	m.Order = master.Order
+	m.Turn = master.Turn
 	m.IsActive = FieldIsActiveActive
 	condition := map[string]interface{}{
 		"id":      master.ID,
@@ -141,7 +140,7 @@ func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
 	}
 	if tx := NodeInfoDB.Model(m).Where(condition).Updates(map[string]interface{}{
 		"level":     m.Level,
-		"order":     m.Order,
+		"turn":      m.Turn,
 		"is_active": m.IsActive,
 	}); tx.Error != nil {
 		return false, tx.Error
@@ -196,9 +195,9 @@ func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
 // Log 输出信息。
 // TODO: 待补充 RegisteredNodeInfo 的 IsActive 字段友好输出。
 func (n *RegisteredNodeInfo) Log() string {
-	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Order: %3d | Active: %d\n",
+	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
 		n.Host, n.Port, n.Name, n.NodeVersion,
-		n.SuperiorID, n.Level, n.Order, n.IsActive,
+		n.SuperiorID, n.Level, n.Turn, n.IsActive,
 	)
 }
 
@@ -211,7 +210,7 @@ func (n *RegisteredNodeInfo) Encode() string {
 	params.Add("id", strconv.FormatUint(n.ID, 10))
 	params.Add("level", strconv.Itoa(int(n.Level)))
 	params.Add("superior_id", strconv.FormatUint(n.SuperiorID, 10))
-	params.Add("order", strconv.FormatUint(uint64(n.Order), 10))
+	params.Add("turn", strconv.FormatUint(uint64(n.Turn), 10))
 	params.Add("is_active", strconv.Itoa(int(n.IsActive)))
 	return params.Encode()
 }
@@ -230,7 +229,7 @@ func InitRegisteredWithModel(n *NodeInfo) *RegisteredNodeInfo {
 		ID:         n.ID,
 		Level:      n.Level,
 		SuperiorID: n.SuperiorID,
-		Order:      n.Order,
+		Turn:       n.Turn,
 		IsActive:   n.IsActive,
 	}
 	return &registered
