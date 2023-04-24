@@ -157,6 +157,7 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 	// TODO: 通知从节点接替以及其它从节点切换主节点
 	n.NotifySlaveToTakeoverSelf()
 	n.NotifyAllSlavesToSwitchSuperior(uint64(0))
+	n.Master.Node.RemoveSelf()
 	n.Self.Node.LogReportExistedMasterWithdrawn()
 	return nil
 }
