@@ -164,7 +164,7 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 	if slave.Level != m.Level+1 || slave.SuperiorID != m.ID {
 		return false, ErrModelInvalid
 	}
-	if tx := NodeInfoDB.Delete(&NodeInfo{}, slave.ID); tx.Error != nil {
+	if tx := NodeInfoDB.Delete(&slave); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil

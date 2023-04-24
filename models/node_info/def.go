@@ -3,6 +3,8 @@ package models
 import (
 	"time"
 
+	models "github.com/rhosocial/go-rush-producer/models/node_info_legacy"
+	"gorm.io/gorm"
 	"gorm.io/plugin/optimisticlock"
 )
 
@@ -13,7 +15,7 @@ const (
 )
 
 type NodeInfo struct {
-	ID          uint64                 `gorm:"column:id;primaryKey;<-:false" json:"id"`
+	ID          uint64                 `gorm:"column:id;primaryKey;autoIncrement;<-:false" json:"id"`
 	Name        string                 `gorm:"column:name;default:''" json:"name"`
 	NodeVersion string                 `gorm:"column:node_version;default:'';<-:create" json:"node_version"`
 	Host        string                 `gorm:"column:host;<-:create" json:"Host"`
@@ -31,6 +33,29 @@ func (m *NodeInfo) TableName() string {
 	return "node_info"
 }
 
+// AfterDelete NodeInfo 删除后将最后一刻数据移入 models.NodeInfoLegacy 中。
+// TODO: 1. 插入操作出错是否报错。若报错，则会阻断删除。若不报错，则会掩盖 models.NodeInfoLegacy 异常。
+func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
+	legacy := models.NodeInfoLegacy{
+		ID:          m.ID,
+		Name:        m.Name,
+		NodeVersion: m.NodeVersion,
+		Host:        m.Host,
+		Port:        m.Port,
+		Level:       m.Level,
+		SuperiorID:  m.SuperiorID,
+		Order:       m.Order,
+		IsActive:    m.IsActive,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+		Version:     m.Version,
+	}
+	if tx := tx.Create(&legacy); tx.Error != nil {
+		return tx.Error // TODO: 1. 此处报错若不想阻塞删除，则应当改为 return nil。
+	}
+	return nil
+}
+
 // FreshNodeInfo 新节点信息。
 type FreshNodeInfo struct {
 	Name        string `form:"name" json:"name" binding:"required"`
@@ -39,6 +64,7 @@ type FreshNodeInfo struct {
 	Port        uint16 `form:"port" json:"port" binding:"required"`
 }
 
+// RegisteredNodeInfo 已登记节点信息。
 type RegisteredNodeInfo struct {
 	FreshNodeInfo
 	ID         uint64 `json:"id" binding:"required"`

@@ -73,6 +73,7 @@ func (n *Pool) startMaster(master *models.NodeInfo, err error) error {
 		// 什么也不做
 	} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
+		n.CommitSelfAsMasterNode()
 	} else if errors.Is(err, models.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
 		return err
@@ -179,8 +180,7 @@ func (n *Pool) Start(identity int) error {
 			return n.startMaster(master, err)
 		} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
 			// 主节点不存在，设置自己为主节点。
-			n.Self.Level -= 1
-			return n.startMaster(n.Self, nil)
+			return n.startMaster(n.Self, models.ErrNodeSuperiorNotExist)
 		} else if errors.Is(err, models.ErrNodeDatabaseError) {
 			// 数据库出错，直接退出。
 			return err
