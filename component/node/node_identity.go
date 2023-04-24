@@ -137,11 +137,18 @@ func (n *Pool) startSlave(master *models.NodeInfo, err error) error {
 
 func (n *Pool) stopMaster() error {
 	n.SwitchIdentityMasterOff()
+	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
+	// TODO: 通知从节点接替以及其它从节点切换主节点
+	n.NotifySlaveToTakeoverSelf()
+	n.NotifyAllSlavesToSwitchSuperior(uint64(0))
+	n.Self.LogReportExistedMasterWithdrawn()
 	return nil
 }
 
 func (n *Pool) stopSlave() error {
 	n.SwitchIdentitySlaveOff()
+	// 通知主节点自己停机。
+	n.NotifyMasterToRemoveSelf()
 	return nil
 }
 
@@ -216,13 +223,9 @@ func (n *Pool) Stop() {
 		return
 	}
 	if n.IsIdentityMaster() {
-		// 通知所有从节点停机或选择一个从节点并通知其接替自己。
-		// TODO: 通知从节点接替以及其它从节点切换主节点
-		n.NotifySlaveToTakeoverSelf()
-		n.NotifyAllSlavesToSwitchSuperior(uint64(0))
+		n.stopMaster()
 	}
 	if n.IsIdentitySlave() {
-		// 通知主节点自己停机。
-		n.NotifyMasterToRemoveSelf()
+		n.stopSlave()
 	}
 }

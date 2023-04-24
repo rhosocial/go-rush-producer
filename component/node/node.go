@@ -202,7 +202,6 @@ func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
 func (n *Pool) AcceptMaster(node *models.NodeInfo) {
 	n.Master = node
 	n.Self.Level = n.Master.Level + 1
-	n.SwitchIdentitySlaveOn()
 }
 
 func (n *Pool) CheckSlaveNodeIfExists(node *models.FreshNodeInfo) *models.NodeInfo {
@@ -238,6 +237,7 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error)
 		return nil, err
 	}
 	n.Slaves[slave.ID] = slave
+	n.Self.LogReportFreshSlaveJoined(&slave)
 	return &slave, nil
 }
 
@@ -258,6 +258,7 @@ func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error)
 		return false, err
 	}
 	delete(n.Slaves, id)
+	n.Self.LogReportExistedSlaveWithdrawn(slave)
 	return true, nil
 }
 

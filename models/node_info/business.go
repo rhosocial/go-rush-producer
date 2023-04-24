@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
+	models "github.com/rhosocial/go-rush-producer/models/node_log"
 	"gorm.io/gorm"
 )
 
@@ -233,4 +234,49 @@ func InitRegisteredWithModel(n *NodeInfo) *RegisteredNodeInfo {
 		IsActive:   n.IsActive,
 	}
 	return &registered
+}
+
+func (m *NodeInfo) LogReportActive() (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeReportActive, 0))
+}
+
+func (m *NodeInfo) LogReportFreshSlaveJoined(fresh *NodeInfo) (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeFreshNodeSlaveJoined, fresh.ID))
+}
+
+func (m *NodeInfo) LogReportExistedSlaveWithdrawn(existed *NodeInfo) (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveWithdrawn, existed.ID))
+}
+
+func (m *NodeInfo) LogReportFreshMasterJoined() (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeFreshNodeMasterJoined, 0))
+}
+
+func (m *NodeInfo) LogReportExistedMasterWithdrawn() (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeMasterWithdrawn, 0))
+}
+
+func (m *NodeInfo) LogReportExistedNodeSlaveReportMasterInactive(master *NodeInfo) (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID))
+}
+
+func (m *NodeInfo) LogReportExistedNodeMasterReportSlaveInactive(slave *NodeInfo) (int64, error) {
+	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID))
+}
+
+func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *models.NodeLog {
+	log := models.NodeLog{
+		NodeID:       m.ID,
+		Type:         logType,
+		TargetNodeID: target,
+	}
+	return &log
+}
+
+func (m *NodeInfo) RecordNodeLog(log *models.NodeLog) (int64, error) {
+	if tx := NodeInfoDB.Create(log); tx.Error == nil {
+		return tx.RowsAffected, nil
+	} else {
+		return 0, tx.Error
+	}
 }
