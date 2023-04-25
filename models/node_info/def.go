@@ -55,21 +55,3 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 	}
 	return nil
 }
-
-// FreshNodeInfo 新节点信息。
-type FreshNodeInfo struct {
-	Name        string `form:"name" json:"name" binding:"required"`
-	NodeVersion string `form:"node_version" json:"node_version" binding:"required"`
-	Host        string `form:"host" json:"host" binding:"required"`
-	Port        uint16 `form:"port" json:"port" binding:"required"`
-}
-
-// RegisteredNodeInfo 已登记节点信息。
-type RegisteredNodeInfo struct {
-	FreshNodeInfo
-	ID         uint64 `json:"id" binding:"required"`
-	Level      uint8  `json:"level" binding:"required"`
-	SuperiorID uint64 `json:"superior_id" binding:"required"`
-	Turn       uint   `json:"turn" binding:"required"`
-	IsActive   uint8  `json:"is_active" binding:"required"`
-}

@@ -5,6 +5,7 @@ import (
 	"math"
 	"sync"
 
+	base "github.com/rhosocial/go-rush-producer/models"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
@@ -83,11 +84,11 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 	return 0
 }
 
-func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
+func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*base.RegisteredNodeInfo {
 	ps.NodesRWLock.RLock()
 	defer ps.NodesRWLock.RUnlock()
 
-	slaves := make(map[uint64]*models.RegisteredNodeInfo)
+	slaves := make(map[uint64]*base.RegisteredNodeInfo)
 	for i, v := range ps.Nodes {
 		slaves[i] = models.InitRegisteredWithModel(v)
 	}
@@ -127,7 +128,7 @@ func (ps *PoolSlaves) Refresh(nodes *[]models.NodeInfo) {
 // 1. 若节点不存在，则报 ErrNodeMasterDoesNotHaveSpecifiedSlave。
 //
 // 2. 检查 models.FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
-func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*models.NodeInfo, error) {
+func (ps *PoolSlaves) Check(id uint64, fresh *base.FreshNodeInfo) (*models.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
 	// slave, exist := n.Slaves[id]
 	slave := ps.Get(id)
@@ -135,7 +136,7 @@ func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*models.Nod
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
 	// 再检查 FreshNodeInfo 是否相同。
-	origin := models.FreshNodeInfo{
+	origin := base.FreshNodeInfo{
 		Name:        slave.Name,
 		NodeVersion: slave.NodeVersion,
 		Host:        slave.Host,
@@ -147,7 +148,7 @@ func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*models.Nod
 	return nil, ErrNodeSlaveFreshNodeInfoInvalid
 }
 
-func (ps *PoolSlaves) CheckIfExists(fresh *models.FreshNodeInfo) *models.NodeInfo {
+func (ps *PoolSlaves) CheckIfExists(fresh *base.FreshNodeInfo) *models.NodeInfo {
 	for id, _ := range ps.Nodes {
 		if slave, err := ps.Check(id, fresh); err == nil {
 			return slave

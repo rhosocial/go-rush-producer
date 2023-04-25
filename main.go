@@ -16,6 +16,7 @@ import (
 	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/component/node"
 	controllerSystem "github.com/rhosocial/go-rush-producer/controllers/server"
+	base "github.com/rhosocial/go-rush-producer/models"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -60,7 +61,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	models.NodeInfoDB = db
+	base.NodeInfoDB = db
 	self := models.NodeInfo{
 		Name:        "GO-RUSH-PRODUCER",
 		NodeVersion: "0.0.1",

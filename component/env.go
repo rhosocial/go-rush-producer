@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/rhosocial/go-rush-common/component/mysql"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	base "github.com/rhosocial/go-rush-producer/models"
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,7 +30,7 @@ type Env struct {
 	Net          *EnvNet                 `yaml:"Net,omitempty"`
 	MySQLServers *[]mysql.EnvMySQLServer `yaml:"MySQLServers,omitempty"`
 	Identity     int                     `yaml:"Identity,omitempty" default:"0"`
-	Master       *models.FreshNodeInfo   `yaml:"Master,omitempty"`
+	Master       *base.FreshNodeInfo     `yaml:"Master,omitempty"`
 }
 
 // GetNetDefault 取得 EnvNet 的默认值。

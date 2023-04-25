@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rhosocial/go-rush-common/component/response"
+	base "github.com/rhosocial/go-rush-producer/models"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
@@ -70,7 +71,7 @@ type RequestMasterStatusResponseData struct {
 }
 
 type RequestMasterStatusResponseExtension struct {
-	Slaves *map[uint64]*models.RegisteredNodeInfo `json:"slaves,omitempty"`
+	Slaves *map[uint64]*base.RegisteredNodeInfo `json:"slaves,omitempty"`
 }
 
 type RequestMasterStatusResponse = response.Generic[RequestMasterStatusResponseData, RequestMasterStatusResponseExtension]
@@ -84,7 +85,7 @@ func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master.Node == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	self := models.FreshNodeInfo{
+	self := base.FreshNodeInfo{
 		Host:        n.Self.Node.Host,
 		Port:        n.Self.Node.Port,
 		Name:        n.Self.Node.Name,
@@ -113,7 +114,7 @@ func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master.Node == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	fresh := models.FreshNodeInfo{
+	fresh := base.FreshNodeInfo{
 		Host:        n.Self.Node.Host,
 		Port:        n.Self.Node.Port,
 		Name:        n.Self.Node.Name,

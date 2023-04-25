@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	base "github.com/rhosocial/go-rush-producer/models"
 	models "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
@@ -114,7 +115,7 @@ func (n *Pool) CommitSelfAsMasterNode() bool {
 }
 
 // AcceptSlave 接受从节点。
-func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*models.NodeInfo, error) {
+func (n *Pool) AcceptSlave(node *base.FreshNodeInfo) (*models.NodeInfo, error) {
 	log.Println(node.Log())
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
@@ -154,7 +155,7 @@ func (n *Pool) AcceptMaster(master *models.NodeInfo) {
 // 1. 检查节点是否有效。检查流程参见 Slaves.Check。
 //
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
-func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
+func (n *Pool) RemoveSlave(id uint64, fresh *base.FreshNodeInfo) (bool, error) {
 	log.Printf("Remove Slave: %d\n", id)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()

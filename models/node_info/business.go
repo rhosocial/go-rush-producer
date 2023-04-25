@@ -4,14 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/url"
-	"strconv"
 
+	base "github.com/rhosocial/go-rush-producer/models"
 	models "github.com/rhosocial/go-rush-producer/models/node_log"
 	"gorm.io/gorm"
 )
-
-var NodeInfoDB *gorm.DB
 
 const (
 	MinimumNumberOfActiveMasterNodes = 1
@@ -30,7 +27,7 @@ func (m *NodeInfo) GetPeerActiveNodes() (*[]NodeInfo, error) {
 		"is_active": FieldIsActiveActive,
 		"level":     m.Level,
 	}
-	tx := NodeInfoDB.Where(condition).Find(&nodes)
+	tx := base.NodeInfoDB.Where(condition).Find(&nodes)
 	if tx.Error != nil {
 		return nil, tx.Error
 	}
@@ -65,7 +62,7 @@ func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 	if specifySuperior {
 		condition["id"] = m.SuperiorID
 	}
-	if tx := NodeInfoDB.Where(condition).First(&node); tx.Error == gorm.ErrRecordNotFound {
+	if tx := base.NodeInfoDB.Where(condition).First(&node); tx.Error == gorm.ErrRecordNotFound {
 		return nil, ErrNodeSuperiorNotExist
 	} else if tx.Error != nil {
 		log.Println(tx.Error)
@@ -80,8 +77,7 @@ func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 		"Level":       m.Level + 1,
 		"superior_id": m.ID,
 	}
-	tx := NodeInfoDB.Where(conditionActiveSlave).Find(&slaveNodes)
-	if tx.Error != nil {
+	if tx := base.NodeInfoDB.Where(conditionActiveSlave).Find(&slaveNodes); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &slaveNodes, nil
@@ -89,7 +85,7 @@ func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 
 func GetNodeInfo(id uint64) (*NodeInfo, error) {
 	var record NodeInfo
-	if tx := NodeInfoDB.Take(&record, id); tx.Error != nil {
+	if tx := base.NodeInfoDB.Take(&record, id); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &record, nil
@@ -117,17 +113,25 @@ func (m *NodeInfo) GetAllActiveSlaveNodes() (*[]NodeInfo, error) {
 func (m *NodeInfo) AddSlaveNode(n *NodeInfo) (bool, error) {
 	n.SuperiorID = m.ID
 	n.Level = m.Level + 1
-	if tx := NodeInfoDB.Create(n); tx.Error != nil {
+	if tx := base.NodeInfoDB.Create(n); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
 }
 
 func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
-	if tx := NodeInfoDB.Create(m); tx.Error != nil {
+	if tx := base.NodeInfoDB.Create(m); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
+}
+
+func (m *NodeInfo) GetNodesBySocket() (*[]NodeInfo, error) {
+	var nodes []NodeInfo
+	if tx := base.NodeInfoDB.Scopes(base.Socket(m.Host, m.Port)).Where("level = ?", m.Level).Find(&nodes); tx.Error != nil {
+		return nil, tx.Error
+	}
+	return &nodes, nil
 }
 
 func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
@@ -138,7 +142,7 @@ func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
 		"id":      master.ID,
 		"version": m.Version,
 	}
-	if tx := NodeInfoDB.Model(m).Where(condition).Updates(map[string]interface{}{
+	if tx := base.NodeInfoDB.Model(m).Where(condition).Updates(map[string]interface{}{
 		"level":     m.Level,
 		"turn":      m.Turn,
 		"is_active": m.IsActive,
@@ -156,7 +160,7 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 	if slave.Level != m.Level+1 || slave.SuperiorID != m.ID {
 		return false, ErrModelInvalid
 	}
-	if tx := NodeInfoDB.Delete(&slave); tx.Error != nil {
+	if tx := base.NodeInfoDB.Delete(&slave); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
@@ -164,63 +168,18 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 
 // RemoveSelf 删除自己。
 func (m *NodeInfo) RemoveSelf() (bool, error) {
-	if tx := NodeInfoDB.Delete(m); tx.Error != nil {
+	if tx := base.NodeInfoDB.Delete(m); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
 }
 
-func (n *FreshNodeInfo) Encode() string {
-	params := make(url.Values)
-	params.Add("name", n.Name)
-	params.Add("node_version", n.NodeVersion)
-	params.Add("host", n.Host)
-	params.Add("port", strconv.Itoa(int(n.Port)))
-	return params.Encode()
-}
-
-func (n *FreshNodeInfo) Log() string {
-	return fmt.Sprintf("Fresh Node: %39s:%-5d | %s @ %s", n.Host, n.Port, n.Name, n.NodeVersion)
-}
-
-func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
-	if n != nil && target == nil || n == nil && target != nil {
-		return false
-	}
-	log.Println("Origin: ", n.Log())
-	log.Println("Target: ", target.Log())
-	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
-}
-
-// Log 输出信息。
-// TODO: 待补充 RegisteredNodeInfo 的 IsActive 字段友好输出。
-func (n *RegisteredNodeInfo) Log() string {
-	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
-		n.Host, n.Port, n.Name, n.NodeVersion,
-		n.SuperiorID, n.Level, n.Turn, n.IsActive,
-	)
-}
-
-func (n *RegisteredNodeInfo) Encode() string {
-	params := make(url.Values)
-	params.Add("name", n.Name)
-	params.Add("node_version", n.NodeVersion)
-	params.Add("host", n.Host)
-	params.Add("port", strconv.Itoa(int(n.Port)))
-	params.Add("id", strconv.FormatUint(n.ID, 10))
-	params.Add("level", strconv.Itoa(int(n.Level)))
-	params.Add("superior_id", strconv.FormatUint(n.SuperiorID, 10))
-	params.Add("turn", strconv.FormatUint(uint64(n.Turn), 10))
-	params.Add("is_active", strconv.Itoa(int(n.IsActive)))
-	return params.Encode()
-}
-
-func InitRegisteredWithModel(n *NodeInfo) *RegisteredNodeInfo {
+func InitRegisteredWithModel(n *NodeInfo) *base.RegisteredNodeInfo {
 	if n == nil {
 		return nil
 	}
-	var registered = RegisteredNodeInfo{
-		FreshNodeInfo: FreshNodeInfo{
+	var registered = base.RegisteredNodeInfo{
+		FreshNodeInfo: base.FreshNodeInfo{
 			Name:        n.Name,
 			NodeVersion: n.NodeVersion,
 			Host:        n.Host,
@@ -273,7 +232,7 @@ func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *models.NodeLog {
 }
 
 func (m *NodeInfo) RecordNodeLog(log *models.NodeLog) (int64, error) {
-	if tx := NodeInfoDB.Create(log); tx.Error == nil {
+	if tx := base.NodeInfoDB.Create(log); tx.Error == nil {
 		return tx.RowsAffected, nil
 	} else {
 		return 0, tx.Error

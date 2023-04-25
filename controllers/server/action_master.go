@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rhosocial/go-rush-producer/component/node"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	base "github.com/rhosocial/go-rush-producer/models"
 )
 
 // ActionSlaveGetMasterStatus 从节点发起获取主节点（自己）状态的请求。
@@ -34,7 +34,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 		return
 	}
 	host := r.PostForm("host")
-	fresh := models.FreshNodeInfo{
+	fresh := base.FreshNodeInfo{
 		Name:        r.PostForm("name"),
 		NodeVersion: r.PostForm("node_version"),
 		Host:        r.ClientIP(),
@@ -79,7 +79,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to parse `port`", err.Error(), nil))
 		return
 	}
-	fresh := models.FreshNodeInfo{
+	fresh := base.FreshNodeInfo{
 		Host:        r.ClientIP(),
 		Port:        uint16(port),
 		Name:        r.Query("name"),
