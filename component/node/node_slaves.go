@@ -41,17 +41,24 @@ func (ps *PoolSlaves) IsWorking() bool {
 // ---- Worker ---- //
 
 func (ps *PoolSlaves) Get(id uint64) *NodeInfo.NodeInfo {
-	if ps.NodesRetry == nil {
-		ps.NodesRetry = make(map[uint64]uint8)
-	}
 	return ps.Nodes[id]
+}
+
+// RetryUpAll 所有节点重试次数加 1。
+func (ps *PoolSlaves) RetryUpAll() {
+	ps.NodesRWLock.Lock()
+	defer ps.NodesRWLock.Unlock()
+	for i, _ := range ps.Nodes {
+		ps.NodesRetry[i] += 1
+	}
 }
 
 // RetryUp 尝试次数递增。
 func (ps *PoolSlaves) RetryUp(id uint64) uint8 {
-	retry := ps.GetRetry(id)
-	if retry == math.MaxUint8 { // 如果已经达到最大值，则不再增大。
-		return retry
+	ps.NodesRWLock.Lock()
+	defer ps.NodesRWLock.Unlock()
+	if ps.NodesRetry[id] == math.MaxUint8 { // 如果已经达到最大值，则不再增大。
+		return ps.NodesRetry[id]
 	}
 	ps.NodesRetry[id] += 1
 	return ps.NodesRetry[id]
@@ -59,9 +66,10 @@ func (ps *PoolSlaves) RetryUp(id uint64) uint8 {
 
 // RetryDown 尝试次数递减。
 func (ps *PoolSlaves) RetryDown(id uint64) uint8 {
-	retry := ps.GetRetry(id)
-	if retry == 0 { // 如果已经达到最小值，则不再减小。
-		return retry
+	ps.NodesRWLock.Lock()
+	defer ps.NodesRWLock.Unlock()
+	if ps.NodesRetry[id] == 0 { // 如果已经达到最小值，则不再减小。
+		return ps.NodesRetry[id]
 	}
 	ps.NodesRetry[id] -= 1
 	return ps.NodesRetry[id]
@@ -69,19 +77,16 @@ func (ps *PoolSlaves) RetryDown(id uint64) uint8 {
 
 // RetryClear 尝试次数清空。
 func (ps *PoolSlaves) RetryClear(id uint64) {
-	if ps.NodesRetry == nil {
-		ps.NodesRetry = make(map[uint64]uint8)
-	}
+	ps.NodesRWLock.Lock()
+	defer ps.NodesRWLock.Unlock()
 	ps.NodesRetry[id] = 0
 }
 
 // GetRetry 获取重试次数。
 func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
-	if ps.NodesRetry == nil {
-		ps.NodesRetry = make(map[uint64]uint8)
-	}
-	ps.RetryClear(id)
-	return 0
+	ps.NodesRWLock.RLock()
+	defer ps.NodesRWLock.RUnlock()
+	return ps.NodesRetry[id]
 }
 
 func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
@@ -91,6 +96,7 @@ func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNod
 	slaves := make(map[uint64]*models.RegisteredNodeInfo)
 	for i, v := range ps.Nodes {
 		slaves[i] = NodeInfo.InitRegisteredWithModel(v)
+		slaves[i].Retry = ps.NodesRetry[i]
 	}
 	return &slaves
 }

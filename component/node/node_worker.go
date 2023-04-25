@@ -59,7 +59,6 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 }
 
 func workerMasterCheckSlaves(nodes *Pool) {
-	for i, _ := range nodes.Slaves.Nodes {
-		nodes.Slaves.RetryUp(i)
-	}
+	log.Println("working...")
+	nodes.Slaves.RetryUpAll()
 }

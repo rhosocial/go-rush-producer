@@ -27,6 +27,7 @@ type RegisteredNodeInfo struct {
 	SuperiorID uint64 `json:"superior_id" binding:"required"`
 	Turn       uint   `json:"turn" binding:"required"`
 	IsActive   uint8  `json:"is_active" binding:"required"`
+	Retry      uint8  `json:"retry"`
 }
 
 func Socket(host string, port uint16) func(db *gorm.DB) *gorm.DB {

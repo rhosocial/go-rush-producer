@@ -45,11 +45,12 @@ func (c *ControllerServer) RegisterActions(r *gin.Engine) {
 				controllerMasterNotifySlave.POST("/switch_superior", c.ActionMasterNotifySlaveToSwitchSuperior)
 			}
 		}
-		// 服务器状态
+		// 服务器状态。用于未知节点获取当前节点信息。
 		controller.GET("", c.ActionStatus)
 	}
 }
 
+// ActionStatus 服务器状态。仅用于未知节点获取当前节点信息。
 func (c *ControllerServer) ActionStatus(r *gin.Context) {
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
 }

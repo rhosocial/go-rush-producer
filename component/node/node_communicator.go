@@ -64,16 +64,19 @@ func (n *Pool) SendRequestMasterStatus(master *NodeInfo.NodeInfo) (*http.Respons
 	return resp, err
 }
 
+// RequestMasterStatusResponseData 从节点请求主节点状态响应体的数据部分。
 type RequestMasterStatusResponseData struct {
-	Host       string `json:"host,omitempty"`
-	ClientIP   string `json:"client_ip,omitempty"`
-	RemoteAddr string `json:"remote_addr,omitempty"`
+	Host       string `json:"host,omitempty"`        // 主节点自己的套接字。
+	ClientIP   string `json:"client_ip,omitempty"`   // 请求从节点的客户端IP地址。
+	RemoteAddr string `json:"remote_addr,omitempty"` // 请求从节点的远程地址（套接字）。
 }
 
+// RequestMasterStatusResponseExtension 从节点请求主节点状态响应体的扩展部分。
 type RequestMasterStatusResponseExtension struct {
-	Slaves *map[uint64]*models.RegisteredNodeInfo `json:"slaves,omitempty"`
+	Slaves *map[uint64]*models.RegisteredNodeInfo `json:"slaves,omitempty"` // 已登记从节点信息。
 }
 
+// RequestMasterStatusResponse 从节点请求主节点状态响应体。
 type RequestMasterStatusResponse = response.Generic[RequestMasterStatusResponseData, RequestMasterStatusResponseExtension]
 
 // ------ MasterStatus ------ //
@@ -235,13 +238,14 @@ func (n *Pool) GetSlaveStatus(id uint64) (bool, error) {
 	return true, nil
 }
 
+// NotifyMasterToAddSelfAsSlaveResponseData 通知主节点添加自己为从节点 HTTP 响应体格式。
 type NotifyMasterToAddSelfAsSlaveResponseData struct {
-	ID          uint64 `json:"id"`
-	Name        string `json:"name"`
-	NodeVersion string `json:"node_version"`
-	Host        string `json:"host"`
-	Port        uint16 `json:"port"`
-	Turn        uint   `json:"turn"`
+	ID          uint64 `json:"id"`           // 新登记的从节点的ID
+	Name        string `json:"name"`         // 新登记的从节点的名称
+	NodeVersion string `json:"node_version"` // 新登记的从节点的版本。
+	Host        string `json:"host"`         // 新登记的从节点的域（IP地址）。
+	Port        uint16 `json:"port"`         // 新登记的从节点的端口。
+	Turn        uint   `json:"turn"`         // 新登记的从节点的接替顺序。
 }
 
 type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSelfAsSlaveResponseData, any]

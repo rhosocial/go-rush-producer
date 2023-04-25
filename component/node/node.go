@@ -96,7 +96,7 @@ func NewNodePool(self *NodeInfo.NodeInfo) *Pool {
 			Node:     self,
 		},
 		Master: PoolMaster{},
-		Slaves: PoolSlaves{},
+		Slaves: PoolSlaves{NodesRetry: make(map[uint64]uint8)},
 	}
 	nodes.RefreshSelfSocket()
 	return &nodes
@@ -240,6 +240,11 @@ func (n *Pool) StartSlavesWorker(ctx context.Context) {
 	}
 	ctxChild, cancel := context.WithCancelCause(ctx)
 	n.Slaves.WorkerCancelFunc = cancel
+	//offset := math.Pow(2.0, float64(n.Self.Node.Turn)) * 100
+	//if offset > 60000 {
+	//	offset = 60000
+	//}
+	//log.Printf("worker interval:%f\n", offset)
 	go n.Slaves.worker(ctxChild, WorkerSlaveIntervals{
 		Base: 1000,
 	}, n, workerSlaveCheckMaster)
