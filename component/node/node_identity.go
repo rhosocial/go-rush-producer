@@ -6,6 +6,7 @@ import (
 	"log"
 
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
+	"gorm.io/gorm"
 )
 
 const (
@@ -69,12 +70,25 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, err
 	}
 }
 
+// startMaster 以"主节点"身份启动。
+//
+// master 为指定的"主节点"。
 func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, err error) error {
 	isMasterFresh := false
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 什么也不做
 	} else if errors.Is(err, NodeInfo.ErrNodeSuperiorNotExist) || errors.Is(err, ErrNodeRequestResponseError) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
+		// 发现相同套接字的其它节点。
+		node, err := master.GetNodeBySocket()
+		log.Println(node, err)
+		if err != gorm.ErrRecordNotFound {
+			// 若发现其它相同套接字节点，则应尝试通信。如果能获取节点状态，则应退出。
+			err := n.CheckNodeStatus(node)
+			if err != nil {
+				log.Println(err)
+			}
+		}
 		if !n.CommitSelfAsMasterNode() {
 			return NodeInfo.ErrNodeDatabaseError
 		}

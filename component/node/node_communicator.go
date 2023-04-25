@@ -162,6 +162,35 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 
 // ------ SlaveGetStatus ------ //
 
+// ------ GetStatus ------ //
+
+func (n *Pool) CheckNodeStatus(node *NodeInfo.NodeInfo) error {
+	resp, err := n.SendRequestStatus(node)
+	log.Println(node, err)
+	if (resp != nil && resp.StatusCode == http.StatusOK) || err == nil {
+		// 请求正常，应当退出。
+		return ErrNodeExisted
+	}
+	inactive, err := n.Self.Node.LogReportExistedNodeMasterReportSlaveInactive(node)
+	log.Println(inactive, err)
+	self, err := node.RemoveSelf()
+	log.Println(self, err)
+	return err
+}
+
+func (n *Pool) SendRequestStatus(node *NodeInfo.NodeInfo) (*http.Response, error) {
+	req, err := n.PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatStatus, node.Socket(), nil, "")
+	if err != nil {
+		log.Println(err)
+		return nil, ErrNodeRequestInvalid
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	return resp, err
+}
+
+// ------ GetStatus ------ //
+
 // PrepareNodeRequest 准备节点间通信请求。
 // 准备请求过程中产生错误将如实返回。
 // 建议用法：调用该函数获取到错误时，不向上继续反馈，而统一报 ErrNodeRequestInvalid 错误。并出错原因记录到日志。

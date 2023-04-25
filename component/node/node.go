@@ -8,6 +8,7 @@ import (
 
 	"github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
+	"gorm.io/gorm"
 )
 
 type Pool struct {
@@ -134,8 +135,18 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, erro
 		Port:        node.Port,
 		Turn:        n.Slaves.GetTurn(),
 	}
+	// 需要判断数据库中是否存在相同套接字的条目。
+	existed, err := slave.GetNodeBySocket()
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// 如有，则要尝试与其通信。若通信成功，则拒绝接入。
+		err = n.CheckNodeStatus(existed)
+		if errors.Is(err, ErrNodeExisted) {
+			return nil, err
+		}
+	}
+
 	// 需要判断数据库中是否存在该条目。
-	_, err := n.Self.Node.AddSlaveNode(&slave)
+	_, err = n.Self.Node.AddSlaveNode(&slave)
 	if err != nil {
 		return nil, err
 	}

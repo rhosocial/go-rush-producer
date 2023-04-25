@@ -30,6 +30,7 @@ var ErrNodeMasterValidButRefused = errors.New("master is valid but refuse to com
 
 var ErrNodeMasterIsSelf = errors.New("master node is self")
 var ErrNodeMasterExisted = errors.New("a valid master node with the same socket already exists")
+var ErrNodeExisted = errors.New(" a valid node with same socket already exists")
 
 // CheckMaster 检查主节点有效性。如果有效，则返回 nil。
 // 如果指定主节点不存在，则报 ErrNodeMasterInvalid。

@@ -14,6 +14,16 @@ const (
 	MinimumNumberOfActiveMasterNodes = 1
 )
 
+func NewNodeInfo(name string, port uint16, level uint8) *NodeInfo {
+	var node = NodeInfo{
+		Name:        name,
+		NodeVersion: "0.0.1",
+		Port:        port,
+		Level:       level,
+	}
+	return &node
+}
+
 func (m *NodeInfo) IsSocketEqual(target *NodeInfo) bool {
 	return m.Host == target.Host && m.Port == target.Port
 }
@@ -126,12 +136,12 @@ func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
 	return true, nil
 }
 
-func (m *NodeInfo) GetNodesBySocket() (*[]NodeInfo, error) {
-	var nodes []NodeInfo
-	if tx := base.NodeInfoDB.Scopes(base.Socket(m.Host, m.Port)).Where("level = ?", m.Level).Find(&nodes); tx.Error != nil {
+func (m *NodeInfo) GetNodeBySocket() (*NodeInfo, error) {
+	var node NodeInfo
+	if tx := base.NodeInfoDB.Scopes(base.Socket(m.Host, m.Port)).Take(&node); tx.Error != nil {
 		return nil, tx.Error
 	}
-	return &nodes, nil
+	return &node, nil
 }
 
 func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
@@ -194,32 +204,34 @@ func InitRegisteredWithModel(n *NodeInfo) *base.RegisteredNodeInfo {
 	return &registered
 }
 
+// ---- Log ---- //
+
 func (m *NodeInfo) LogReportActive() (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeReportActive, 0))
+	return m.NewNodeLog(models.NodeLogTypeReportActive, 0).Record()
 }
 
 func (m *NodeInfo) LogReportFreshSlaveJoined(fresh *NodeInfo) (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeFreshNodeSlaveJoined, fresh.ID))
+	return m.NewNodeLog(models.NodeLogTypeFreshNodeSlaveJoined, fresh.ID).Record()
 }
 
 func (m *NodeInfo) LogReportExistedSlaveWithdrawn(existed *NodeInfo) (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveWithdrawn, existed.ID))
+	return m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveWithdrawn, existed.ID).Record()
 }
 
 func (m *NodeInfo) LogReportFreshMasterJoined() (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeFreshNodeMasterJoined, 0))
+	return m.NewNodeLog(models.NodeLogTypeFreshNodeMasterJoined, 0).Record()
 }
 
 func (m *NodeInfo) LogReportExistedMasterWithdrawn() (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeMasterWithdrawn, 0))
+	return m.NewNodeLog(models.NodeLogTypeExistedNodeMasterWithdrawn, 0).Record()
 }
 
 func (m *NodeInfo) LogReportExistedNodeSlaveReportMasterInactive(master *NodeInfo) (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID))
+	return m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID).Record()
 }
 
 func (m *NodeInfo) LogReportExistedNodeMasterReportSlaveInactive(slave *NodeInfo) (int64, error) {
-	return m.RecordNodeLog(m.NewNodeLog(models.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID))
+	return m.NewNodeLog(models.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID).Record()
 }
 
 func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *models.NodeLog {
@@ -231,10 +243,4 @@ func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *models.NodeLog {
 	return &log
 }
 
-func (m *NodeInfo) RecordNodeLog(log *models.NodeLog) (int64, error) {
-	if tx := base.NodeInfoDB.Create(log); tx.Error == nil {
-		return tx.RowsAffected, nil
-	} else {
-		return 0, tx.Error
-	}
-}
+// ---- Log ---- //

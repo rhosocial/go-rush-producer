@@ -31,7 +31,7 @@ type RegisteredNodeInfo struct {
 
 func Socket(host string, port uint16) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("host = ? and port = ?", host, port)
+		return db.Where("host = ? AND port = ?", host, port)
 	}
 }
 

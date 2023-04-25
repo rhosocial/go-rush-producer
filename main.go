@@ -62,13 +62,8 @@ func main() {
 		log.Fatalln(err)
 	}
 	models.NodeInfoDB = db
-	self := NodeInfo.NodeInfo{
-		Name:        "GO-RUSH-PRODUCER",
-		NodeVersion: "0.0.1",
-		Port:        *(*(*component.GlobalEnv).Net).ListenPort,
-		Level:       1,
-	}
-	node.Nodes = node.NewNodePool(&self)
+	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", *(*(*component.GlobalEnv).Net).ListenPort, 1)
+	node.Nodes = node.NewNodePool(self)
 	node.Nodes.Start(context.Background(), (*component.GlobalEnv).Identity)
 	defer node.Nodes.Stop(context.Background())
 	// For-loop
