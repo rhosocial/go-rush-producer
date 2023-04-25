@@ -167,7 +167,7 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 func (n *Pool) CheckNodeStatus(node *NodeInfo.NodeInfo) error {
 	resp, err := n.SendRequestStatus(node)
 	log.Println(node, err)
-	if (resp != nil && resp.StatusCode == http.StatusOK) || err == nil {
+	if resp != nil && resp.StatusCode == http.StatusOK {
 		// 请求正常，应当退出。
 		return ErrNodeExisted
 	}
