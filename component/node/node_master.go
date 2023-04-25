@@ -5,11 +5,11 @@ import (
 	"math"
 	"sync"
 
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type PoolMaster struct {
-	Node                   *models.NodeInfo
+	Node                   *NodeInfo.NodeInfo
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
 	Retry                  uint8
@@ -19,7 +19,7 @@ func (pm *PoolMaster) IsWorking() bool {
 	return pm.WorkerCancelFunc != nil
 }
 
-func (pm *PoolMaster) Accept(master *models.NodeInfo) {
+func (pm *PoolMaster) Accept(master *NodeInfo.NodeInfo) {
 	pm.Node = master
 }
 

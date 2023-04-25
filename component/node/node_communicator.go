@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/rhosocial/go-rush-common/component/response"
-	base "github.com/rhosocial/go-rush-producer/models"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	"github.com/rhosocial/go-rush-producer/models"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 const (
@@ -47,10 +47,10 @@ const (
 // ------ MasterStatus ------ //
 
 // SendRequestMasterStatus 向"主节点-状态"发送请求。
-// 如果已经是最高级，则报 models.ErrNodeLevelAlreadyHighest。
+// 如果已经是最高级，则报 ErrNodeLevelAlreadyHighest。
 // 如果构建请求出错，则据实返回，此时第一个返回值为空。
 // 请求构建成功，则发送请求，超时固定设为 1 秒。并返回响应和对应的错误。
-func (n *Pool) SendRequestMasterStatus(master *models.NodeInfo) (*http.Response, error) {
+func (n *Pool) SendRequestMasterStatus(master *NodeInfo.NodeInfo) (*http.Response, error) {
 	if master == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
@@ -71,7 +71,7 @@ type RequestMasterStatusResponseData struct {
 }
 
 type RequestMasterStatusResponseExtension struct {
-	Slaves *map[uint64]*base.RegisteredNodeInfo `json:"slaves,omitempty"`
+	Slaves *map[uint64]*models.RegisteredNodeInfo `json:"slaves,omitempty"`
 }
 
 type RequestMasterStatusResponse = response.Generic[RequestMasterStatusResponseData, RequestMasterStatusResponseExtension]
@@ -85,7 +85,7 @@ func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	if n.Master.Node == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	self := base.FreshNodeInfo{
+	self := models.FreshNodeInfo{
 		Host:        n.Self.Node.Host,
 		Port:        n.Self.Node.Port,
 		Name:        n.Self.Node.Name,
@@ -114,7 +114,7 @@ func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	if n.Master.Node == nil {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	fresh := base.FreshNodeInfo{
+	fresh := models.FreshNodeInfo{
 		Host:        n.Self.Node.Host,
 		Port:        n.Self.Node.Port,
 		Name:        n.Self.Node.Name,
@@ -237,7 +237,7 @@ func (n *Pool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 		return false, err
 	}
 	// 校验成功，将返回的ID作为自己的ID。
-	self, err := models.GetNodeInfo(respData.Data.ID)
+	self, err := NodeInfo.GetNodeInfo(respData.Data.ID)
 	n.Self.Node = self
 	return true, nil
 }

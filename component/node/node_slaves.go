@@ -5,13 +5,13 @@ import (
 	"math"
 	"sync"
 
-	base "github.com/rhosocial/go-rush-producer/models"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	"github.com/rhosocial/go-rush-producer/models"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type PoolSlaves struct {
 	NodesRWLock sync.RWMutex
-	Nodes       map[uint64]*models.NodeInfo
+	Nodes       map[uint64]*NodeInfo.NodeInfo
 	NodesRetry  map[uint64]uint8
 	NextTurn    uint
 
@@ -40,7 +40,7 @@ func (ps *PoolSlaves) IsWorking() bool {
 
 // ---- Worker ---- //
 
-func (ps *PoolSlaves) Get(id uint64) *models.NodeInfo {
+func (ps *PoolSlaves) Get(id uint64) *NodeInfo.NodeInfo {
 	if ps.NodesRetry == nil {
 		ps.NodesRetry = make(map[uint64]uint8)
 	}
@@ -84,19 +84,19 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 	return 0
 }
 
-func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*base.RegisteredNodeInfo {
+func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
 	ps.NodesRWLock.RLock()
 	defer ps.NodesRWLock.RUnlock()
 
-	slaves := make(map[uint64]*base.RegisteredNodeInfo)
+	slaves := make(map[uint64]*models.RegisteredNodeInfo)
 	for i, v := range ps.Nodes {
-		slaves[i] = models.InitRegisteredWithModel(v)
+		slaves[i] = NodeInfo.InitRegisteredWithModel(v)
 	}
 	return &slaves
 }
 
 // AddSlaveNode 添加从节点信息。
-func (ps *PoolSlaves) AddSlaveNode(slave *models.NodeInfo) bool {
+func (ps *PoolSlaves) AddSlaveNode(slave *NodeInfo.NodeInfo) bool {
 	if slave == nil {
 		return false
 	}
@@ -108,8 +108,8 @@ func (ps *PoolSlaves) AddSlaveNode(slave *models.NodeInfo) bool {
 
 // Refresh 刷新节点。
 // 刷新后会重新确定下一个顺序。
-func (ps *PoolSlaves) Refresh(nodes *[]models.NodeInfo) {
-	result := make(map[uint64]*models.NodeInfo)
+func (ps *PoolSlaves) Refresh(nodes *[]NodeInfo.NodeInfo) {
+	result := make(map[uint64]*NodeInfo.NodeInfo)
 	turnMax := uint(0)
 	for _, node := range *nodes {
 		if true { // TODO: 判断节点是否有效。
@@ -128,7 +128,7 @@ func (ps *PoolSlaves) Refresh(nodes *[]models.NodeInfo) {
 // 1. 若节点不存在，则报 ErrNodeMasterDoesNotHaveSpecifiedSlave。
 //
 // 2. 检查 models.FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
-func (ps *PoolSlaves) Check(id uint64, fresh *base.FreshNodeInfo) (*models.NodeInfo, error) {
+func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*NodeInfo.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
 	// slave, exist := n.Slaves[id]
 	slave := ps.Get(id)
@@ -136,7 +136,7 @@ func (ps *PoolSlaves) Check(id uint64, fresh *base.FreshNodeInfo) (*models.NodeI
 		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
 	}
 	// 再检查 FreshNodeInfo 是否相同。
-	origin := base.FreshNodeInfo{
+	origin := models.FreshNodeInfo{
 		Name:        slave.Name,
 		NodeVersion: slave.NodeVersion,
 		Host:        slave.Host,
@@ -148,7 +148,7 @@ func (ps *PoolSlaves) Check(id uint64, fresh *base.FreshNodeInfo) (*models.NodeI
 	return nil, ErrNodeSlaveFreshNodeInfoInvalid
 }
 
-func (ps *PoolSlaves) CheckIfExists(fresh *base.FreshNodeInfo) *models.NodeInfo {
+func (ps *PoolSlaves) CheckIfExists(fresh *models.FreshNodeInfo) *NodeInfo.NodeInfo {
 	for id, _ := range ps.Nodes {
 		if slave, err := ps.Check(id, fresh); err == nil {
 			return slave

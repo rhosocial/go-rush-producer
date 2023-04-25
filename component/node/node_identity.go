@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log"
 
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 const (
@@ -54,7 +54,7 @@ func (n *Pool) IsIdentityNotDetermined() bool {
 // 2. 查阅数据库。如果查找不到记录，则报 models.ErrNodeSuperiorNotExist。如果数据库出错，则据实报错。
 //
 // 3. 如果存在主节点数据，则尝试检查主节点。参见 CheckMaster。
-func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error) {
+func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, error) {
 	log.Println("Discover master...")
 	if n.Self.Node.Level == 0 {
 		return nil, ErrNodeLevelAlreadyHighest
@@ -69,17 +69,17 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*models.NodeInfo, error
 	}
 }
 
-func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err error) error {
+func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, err error) error {
 	isMasterFresh := false
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 什么也不做
-	} else if errors.Is(err, models.ErrNodeSuperiorNotExist) || errors.Is(err, ErrNodeRequestResponseError) {
+	} else if errors.Is(err, NodeInfo.ErrNodeSuperiorNotExist) || errors.Is(err, ErrNodeRequestResponseError) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
 		if !n.CommitSelfAsMasterNode() {
-			return models.ErrNodeDatabaseError
+			return NodeInfo.ErrNodeDatabaseError
 		}
 		isMasterFresh = true
-	} else if errors.Is(err, models.ErrNodeDatabaseError) {
+	} else if errors.Is(err, NodeInfo.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
 		return err
 	} else if errors.Is(err, ErrNodeMasterInvalid) {
@@ -110,14 +110,14 @@ func (n *Pool) startMaster(ctx context.Context, master *models.NodeInfo, err err
 }
 
 // startSlave 将自己作为 master 的从节点。
-func (n *Pool) startSlave(ctx context.Context, master *models.NodeInfo, err error) error {
+func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, err error) error {
 	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 		// 已经是最高级，不存在上级主节点。
 		return err
-	} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
+	} else if errors.Is(err, NodeInfo.ErrNodeSuperiorNotExist) {
 		// 主节点不存在，直接退出。
 		return err
-	} else if errors.Is(err, models.ErrNodeDatabaseError) {
+	} else if errors.Is(err, NodeInfo.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
 		return err
 	} else if errors.Is(err, ErrNodeMasterInvalid) {
@@ -204,10 +204,10 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 			// 已经是最高级，不存在上级主节点。认为自己是主节点。
 			return n.startMaster(ctx, master, err)
-		} else if errors.Is(err, models.ErrNodeSuperiorNotExist) {
+		} else if errors.Is(err, NodeInfo.ErrNodeSuperiorNotExist) {
 			// 主节点不存在，设置自己为主节点。
-			return n.startMaster(ctx, n.Self.Node, models.ErrNodeSuperiorNotExist)
-		} else if errors.Is(err, models.ErrNodeDatabaseError) {
+			return n.startMaster(ctx, n.Self.Node, NodeInfo.ErrNodeSuperiorNotExist)
+		} else if errors.Is(err, NodeInfo.ErrNodeDatabaseError) {
 			// 数据库出错，直接退出。
 			return err
 		} else if errors.Is(err, ErrNodeMasterInvalid) {

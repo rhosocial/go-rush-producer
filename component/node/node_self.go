@@ -5,12 +5,12 @@ import (
 	"log"
 	"net/http"
 
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type PoolSelf struct {
 	Identity uint8
-	Node     *models.NodeInfo
+	Node     *NodeInfo.NodeInfo
 }
 
 func (ps *PoolSelf) SetLevel(level uint8) {
@@ -39,7 +39,7 @@ var ErrNodeMasterExisted = errors.New("a valid master node with the same socket 
 // 1. 如果相同，则认为是自己，报 ErrNodeMasterIsSelf。
 //
 // 2. 如果不同，则认为主节点是另一个进程。尝试与其沟通，参见 CheckMasterWithRequest。
-func (n *Pool) CheckMaster(master *models.NodeInfo) error {
+func (n *Pool) CheckMaster(master *NodeInfo.NodeInfo) error {
 	if master == nil {
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid
@@ -63,7 +63,7 @@ func (n *Pool) CheckMaster(master *models.NodeInfo) error {
 // 4. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
 //
 // 其它情况没有任何错误。
-func (n *Pool) CheckMasterWithRequest(master *models.NodeInfo) error {
+func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) error {
 	if master == nil {
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid

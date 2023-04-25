@@ -6,8 +6,8 @@ import (
 	"log"
 	"net"
 
-	base "github.com/rhosocial/go-rush-producer/models"
-	models "github.com/rhosocial/go-rush-producer/models/node_info"
+	"github.com/rhosocial/go-rush-producer/models"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type Pool struct {
@@ -84,12 +84,12 @@ func (n *Pool) RefreshSelfSocket() error {
 	return nil
 }
 
-func NewNodePool(self *models.NodeInfo) *Pool {
+func NewNodePool(self *NodeInfo.NodeInfo) *Pool {
 	var nodes = Pool{
 		// Identity: IdentityNotDetermined,
-		// Master:   &models.NodeInfo{},
+		// Master:   &NodeInfo.NodeInfo{},
 		// Self: self,
-		// Slaves:   make(map[uint64]models.NodeInfo),
+		// Slaves:   make(map[uint64]NodeInfo.NodeInfo),
 		Self: PoolSelf{
 			Identity: IdentityNotDetermined,
 			Node:     self,
@@ -115,7 +115,7 @@ func (n *Pool) CommitSelfAsMasterNode() bool {
 }
 
 // AcceptSlave 接受从节点。
-func (n *Pool) AcceptSlave(node *base.FreshNodeInfo) (*models.NodeInfo, error) {
+func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, error) {
 	log.Println(node.Log())
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
@@ -127,7 +127,7 @@ func (n *Pool) AcceptSlave(node *base.FreshNodeInfo) (*models.NodeInfo, error) {
 		return slave, nil
 	}
 	// 如果不存在，则加入该节点为从节点。
-	slave := models.NodeInfo{
+	slave := NodeInfo.NodeInfo{
 		Name:        node.Name,
 		NodeVersion: node.NodeVersion,
 		Host:        node.Host,
@@ -145,7 +145,7 @@ func (n *Pool) AcceptSlave(node *base.FreshNodeInfo) (*models.NodeInfo, error) {
 }
 
 // AcceptMaster 接受主节点。
-func (n *Pool) AcceptMaster(master *models.NodeInfo) {
+func (n *Pool) AcceptMaster(master *NodeInfo.NodeInfo) {
 	n.Master.Accept(master)
 	n.Self.SetLevel(n.Master.Node.Level + 1)
 }
@@ -155,7 +155,7 @@ func (n *Pool) AcceptMaster(master *models.NodeInfo) {
 // 1. 检查节点是否有效。检查流程参见 Slaves.Check。
 //
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
-func (n *Pool) RemoveSlave(id uint64, fresh *base.FreshNodeInfo) (bool, error) {
+func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
 	log.Printf("Remove Slave: %d\n", id)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
