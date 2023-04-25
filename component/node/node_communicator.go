@@ -25,19 +25,22 @@ const (
 	RequestSlaveStatus        = 0x00020001
 	RequestSlaveNotify        = 0x00020011
 
-	RequestMethodStatus             = http.MethodGet
-	RequestMethodMasterStatus       = http.MethodGet
-	RequestMethodMasterNotifyAdd    = http.MethodPut
-	RequestMethodMasterNotifyDelete = http.MethodDelete
-	RequestMethodSlaveStatus        = http.MethodGet
+	RequestMethodStatus                    = http.MethodGet
+	RequestMethodMasterStatus              = http.MethodGet
+	RequestMethodMasterNotifyAdd           = http.MethodPut
+	RequestMethodMasterNotifyDelete        = http.MethodDelete
+	RequestMethodSlaveStatus               = http.MethodGet
+	RequestMethodSlaveNotifyTakeover       = http.MethodPost
+	RequestMethodSlaveNotifySwitchSuperior = http.MethodPost
 
-	RequestURLFormatStatus             = "http://%s/server"
-	RequestURLFormatMasterStatus       = "http://%s/server/master"
-	RequestURLFormatMasterNotifyAdd    = "http://%s/server/master/notify"
-	RequestURLFormatMasterNotifyModify = "http://%s/server/master/notify"
-	RequestURLFormatMasterNotifyDelete = "http://%s/server/master/notify"
-	RequestURLFormatSlaveStatus        = "http://%s/server/slave"
-	RequestURLFormatSlaveNotify        = "http://%s/server/slave/notify"
+	RequestURLFormatStatus                    = "http://%s/server"
+	RequestURLFormatMasterStatus              = "http://%s/server/master"
+	RequestURLFormatMasterNotifyAdd           = "http://%s/server/master/notify"
+	RequestURLFormatMasterNotifyModify        = "http://%s/server/master/notify"
+	RequestURLFormatMasterNotifyDelete        = "http://%s/server/master/notify"
+	RequestURLFormatSlaveStatus               = "http://%s/server/slave"
+	RequestURLFormatSlaveNotifyTakeover       = "http://%s/server/slave/notify/takeover"
+	RequestURLFormatSlaveNotifySwitchSuperior = "http://%s/server/slave/notify/switch_superior"
 
 	RequestHeaderXAuthorizationTokenKey   = "X-Authorization-Token"
 	RequestHeaderXAuthorizationTokenValue = "$2a$04$jajGD06BJd.KmTM7pgCRzeFSIMWLAUbTCOQPNJRDMnMltPZp3tK1y"
@@ -194,6 +197,46 @@ func (n *Pool) SendRequestStatus(node *NodeInfo.NodeInfo) (*http.Response, error
 
 // ------ GetStatus ------ //
 
+// ------ SlaveNotifyMasterToSwitchSuperior ------ //
+
+func (n *Pool) SendRequestSlaveNotifyMasterToSwitchSuperior(node *NodeInfo.NodeInfo, master *NodeInfo.NodeInfo) (*http.Response, error) {
+	if master == nil {
+		return nil, ErrNodeMasterInvalid
+	}
+	var body = strings.NewReader(master.ToRegisteredNodeInfo().Encode())
+	req, err := n.PrepareNodeRequest(RequestMethodSlaveNotifySwitchSuperior, RequestURLFormatSlaveNotifySwitchSuperior, node.Socket(), body, "application/x-www-form-urlencoded")
+	if err != nil {
+		log.Println(err)
+		return nil, ErrNodeRequestInvalid
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	return resp, err
+}
+
+// ------ SlaveNotifyMasterToSwitchSuperior ------ //
+
+var ErrNodeSlaveNodeInvalid = errors.New("the specified slave node is invalid")
+
+// ------ SlaveNotifyMasterToTakeover ------ //
+
+func (n *Pool) SendRequestSlaveNotifyMasterToTakeover(node *NodeInfo.NodeInfo) (*http.Response, error) {
+	if node == nil {
+		return nil, ErrNodeSlaveNodeInvalid
+	}
+	var body = strings.NewReader(n.Self.Node.ToRegisteredNodeInfo().Encode())
+	req, err := n.PrepareNodeRequest(RequestMethodSlaveNotifyTakeover, RequestURLFormatSlaveNotifyTakeover, node.Socket(), body, "application/x-www-form-urlencoded")
+	if err != nil {
+		log.Println(err)
+		return nil, ErrNodeRequestResponseError
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	return resp, err
+}
+
+// ------ SlaveNotifyMasterToTakeover ------ //
+
 // PrepareNodeRequest 准备节点间通信请求。
 // 准备请求过程中产生错误将如实返回。
 // 建议用法：调用该函数获取到错误时，不向上继续反馈，而统一报 ErrNodeRequestInvalid 错误。并出错原因记录到日志。
@@ -293,18 +336,56 @@ func (n *Pool) NotifyMasterToRemoveSelf() (bool, error) {
 }
 
 // NotifySlaveToTakeoverSelf 当前节点（主节点）通知从节点接替自己。
-func (n *Pool) NotifySlaveToTakeoverSelf() (bool, error) {
+func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	if n.Slaves.Count() == 0 {
 		return true, nil
 	} // 如果没有从节点，则不必通知。
 
+	n.Slaves.NodesRWLock.Lock()
+	defer n.Slaves.NodesRWLock.Unlock()
+	var candidate *NodeInfo.NodeInfo
+	for i, v := range n.Slaves.Nodes {
+		if i == candidateID {
+			candidate = v
+			break
+		}
+	}
+
+	resp, err := n.SendRequestSlaveNotifyMasterToTakeover(candidate)
+	if err != nil {
+		return false, err
+	}
+	if resp != nil {
+		log.Println(resp.StatusCode, resp.Body)
+	}
 	return true, nil
 }
 
-func (n *Pool) NotifyAllSlavesToSwitchSuperior(succeedID uint64) (bool, error) {
+func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error) {
+	n.Slaves.NodesRWLock.Lock()
+	defer n.Slaves.NodesRWLock.Unlock()
+	var candidate *NodeInfo.NodeInfo
+	for i, v := range n.Slaves.Nodes {
+		if i == candidateID {
+			candidate = v
+			break
+		}
+	}
+	for i, v := range n.Slaves.Nodes {
+		if i != candidateID {
+			go n.NotifySlaveToSwitchSuperior(v, candidate)
+		}
+	}
 	return true, nil
 }
 
-func (n *Pool) NotifySlaveToSwitchSuperior() (bool, error) {
+func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *NodeInfo.NodeInfo) (bool, error) {
+	resp, err := n.SendRequestSlaveNotifyMasterToSwitchSuperior(slave, candidate) // 不关心响应。
+	if err != nil {
+		return false, err
+	}
+	if resp != nil {
+		log.Println(resp.StatusCode, resp.Body)
+	}
 	return true, nil
 }

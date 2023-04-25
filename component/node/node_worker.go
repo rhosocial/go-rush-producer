@@ -38,6 +38,9 @@ func workerSlaveCheckMaster(nodes *Pool) {
 		nodes.Master.RetryUp()
 		log.Println(err)
 	}
+	if nodes.Master.Retry >= 3 {
+		// 重试次数过多，尝试主动接替。
+	}
 }
 
 type WorkerMasterIntervals struct {

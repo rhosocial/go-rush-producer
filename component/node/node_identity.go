@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"errors"
+	base "github.com/rhosocial/go-rush-producer/models"
 	"log"
 
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -169,8 +170,9 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 	n.SwitchIdentityMasterOff()
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// TODO: 通知从节点接替以及其它从节点切换主节点
-	n.NotifySlaveToTakeoverSelf()
-	n.NotifyAllSlavesToSwitchSuperior(uint64(0))
+	candidateID := n.Slaves.GetTurnCandidate()
+	go n.NotifyAllSlavesToSwitchSuperior(candidateID)
+	n.NotifySlaveToTakeoverSelf(candidateID)
 	n.Master.Node.RemoveSelf()
 	n.Self.Node.LogReportExistedMasterWithdrawn()
 	return nil
@@ -264,5 +266,25 @@ func (n *Pool) Stop(ctx context.Context) {
 	}
 	if n.IsIdentitySlave() {
 		n.stopSlave(ctx)
+	}
+}
+
+// Handover 主节点向从节点移交。
+func (n *Pool) Handover() {
+	n.stopMaster(context.Background())
+}
+
+// Supersede 从节点接替主节点。
+func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
+	if master == nil {
+		return
+	}
+	real, err := NodeInfo.GetNodeInfo(master.ID)
+	if err != nil {
+		return
+	}
+	err = n.startMaster(context.Background(), real, nil)
+	if err != nil {
+		return
 	}
 }

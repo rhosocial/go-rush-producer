@@ -1,6 +1,7 @@
 package controllerServer
 
 import (
+	base "github.com/rhosocial/go-rush-producer/models"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,11 +21,25 @@ func (c *ControllerServer) ActionMasterGetSlaveStatus(r *gin.Context) {
 
 // ActionMasterNotifySlaveToTakeover 当前节点（从节点）收到主节点发起接替自己主节点身份请求。（仅对等网络有效）
 func (c *ControllerServer) ActionMasterNotifySlaveToTakeover(r *gin.Context) {
-
+	// 1.
+	var existed base.RegisteredNodeInfo
+	if err := r.ShouldBind(&existed); err != nil {
+		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to bind post body", err.Error(), nil))
+		return
+	}
+	node.Nodes.Supersede()
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
 }
 
 // ActionMasterNotifySlaveToSwitchSuperior 当前节点（从节点）收到主节点发起向另一节点切换主节点身份请求。（仅对等网络有效）
 func (c *ControllerServer) ActionMasterNotifySlaveToSwitchSuperior(r *gin.Context) {
-
+	var superseded base.RegisteredNodeInfo
+	if err := r.ShouldBind(&superseded); err != nil {
+		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to bind post body", err.Error(), nil))
+		return
+	}
+	// 1. 将超时容忍时限加长。原有时长为 m，加长后为 m + n。
+	// 2. 在 m 时询问新 master。
+	// 3. 若新 master 准备好，且有自己。恢复原有容忍时长 n。
+	// 4. 若新 master 未准备好，等待 1 次。若再次未准备好。尝试接替。
 }

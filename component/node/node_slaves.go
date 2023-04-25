@@ -19,6 +19,8 @@ type PoolSlaves struct {
 	WorkerCancelFuncRWLock sync.RWMutex
 }
 
+// ---- Turn ---- //
+
 func (ps *PoolSlaves) Count() int {
 	return len(ps.Nodes)
 }
@@ -31,6 +33,22 @@ func (ps *PoolSlaves) GetTurn() uint {
 	defer ps.incTurn()
 	return ps.NextTurn
 }
+
+func (ps *PoolSlaves) GetTurnCandidate() uint64 {
+	ps.NodesRWLock.RLock()
+	defer ps.NodesRWLock.RUnlock()
+	turn := uint(math.MaxUint)
+	target := uint64(0)
+	for i, v := range ps.Nodes {
+		if turn >= v.Turn {
+			turn = v.Turn
+			target = i
+		}
+	}
+	return target
+}
+
+// ---- Turn ---- //
 
 // ---- Worker ---- //
 

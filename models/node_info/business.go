@@ -144,22 +144,111 @@ func (m *NodeInfo) GetNodeBySocket() (*NodeInfo, error) {
 	return &node, nil
 }
 
-func (m *NodeInfo) TakeoverMasterNode(master *NodeInfo) (bool, error) {
-	m.Level = master.Level
-	m.Turn = master.Turn
-	m.IsActive = FieldIsActiveActive
-	condition := map[string]interface{}{
-		"id":      master.ID,
-		"version": m.Version,
-	}
-	if tx := base.NodeInfoDB.Model(m).Where(condition).Updates(map[string]interface{}{
-		"level":     m.Level,
-		"turn":      m.Turn,
-		"is_active": m.IsActive,
-	}); tx.Error != nil {
-		return false, tx.Error
-	}
-	return true, nil
+var ErrMasterNodeIsNotSuperior = errors.New("the specified master node is not my superior")
+var ErrSlaveNodeIsNotSubordinate = errors.New("the specified slave node is not my subordinate")
+
+func (m *NodeInfo) IsSuperior(master *NodeInfo) bool {
+	return m != nil && m.Level > 0 && master != nil && m.Level == master.Level+1 && m.SuperiorID == master.ID
+}
+
+func (m *NodeInfo) IsSubordinate(slave *NodeInfo) bool {
+	return m != nil && slave != nil && slave.Level > 1 && m.Level+1 == slave.Level && slave.SuperiorID == m.ID
+}
+
+// SupersedeMasterNode 主节点异常时从节点尝试接替。
+//
+// 此方法涉及到一系列数据库操作，需要在事务中进行。其中某次数据库操作报错，所有之前的操作都将会滚。
+//
+// 步骤如下：
+//
+// 1. 查询 master 对应的 ID、Host、Port、Level 是否与数据表内一致。如果不一致，则报错。
+//
+// 2. 删除 master 记录。
+//
+// 3. 修改自己的记录：level -=1，m.SuperiorID = master.SuperiorID，m.Turn = master.Turn。
+//
+// 4. 修改其它节点的 SuperiorID 为自己。
+func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
+	return base.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
+		// 1. 判断提供的 master 是否与数据库对应，以及是否为我的上级。
+		var realMaster NodeInfo
+		tx = tx.Where(base.Socket(master.Host, master.Port)).Where("level = ?", master.Level).Take(&realMaster, master.ID)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		if !m.IsSuperior(&realMaster) {
+			return ErrMasterNodeIsNotSuperior
+		}
+		// 2. 记录上级ID和接替顺序，然后删除。
+		superiorID := realMaster.SuperiorID
+		turn := realMaster.Turn
+		tx = tx.Delete(realMaster)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		// 3. 将自己的级别提升，并尝试保存。
+		m.Level -= 1
+		m.SuperiorID = superiorID
+		m.Turn = turn
+		tx = tx.Save(m)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		// 4. 修改其它节点的上级ID为自己。
+		tx = tx.Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Update("superior_id", m.ID)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		return nil
+	})
+}
+
+// HandoverMasterNode 主节点主动通知候选节点接替自己。
+//
+// 此方法涉及到一系列数据库操作，需要在事务中进行。其中某次数据库操作报错，所有之前的操作都将会滚。
+//
+// 步骤如下：
+//
+// 1. 查询 candidate 对应的 ID、Host、Port、Level 是否与数据表内一致。如果不一致，则报错。
+//
+// 2. 删除 master 记录。
+//
+// 3. 修改 candidate 的记录：level -=1，candidate.SuperiorID = master.SuperiorID，candidate.Turn = master.Turn。
+//
+// 4. 修改其它节点的 SuperiorID 为自己。
+func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
+	return base.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
+		// 1. 判断提供的 candidate 是否与数据库对应，以及是否为我的下级。
+		var realSlave NodeInfo
+		tx = tx.Where(base.Socket(candidate.Host, candidate.Port)).Where("level = ?", candidate.Level).Take(&realSlave, candidate.ID)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		if !m.IsSubordinate(candidate) {
+			return ErrSlaveNodeIsNotSubordinate
+		}
+		// 2. 记录自己的ID和接替顺序，然后删除。
+		superiorID := m.SuperiorID
+		turn := m.Turn
+		tx = tx.Delete(m)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		// 3. 将候选的级别提升，并尝试保存。
+		realSlave.Level -= 1
+		realSlave.SuperiorID = superiorID
+		realSlave.Turn = turn
+		tx = tx.Save(realSlave)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		// 4. 修改其它节点的上级ID为自己。
+		tx = tx.Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Update("superior_id", realSlave.ID)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		return nil
+	})
 }
 
 // ErrModelInvalid 表示删除出错。
@@ -244,3 +333,32 @@ func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *models.NodeLog {
 }
 
 // ---- Log ---- //
+
+func (m *NodeInfo) ToFreshNodeInfo() *base.FreshNodeInfo {
+	if m == nil {
+		return nil
+	}
+	var fresh = base.FreshNodeInfo{
+		Name:        m.Name,
+		NodeVersion: m.NodeVersion,
+		Host:        m.Host,
+		Port:        m.Port,
+	}
+	return &fresh
+}
+
+func (m *NodeInfo) ToRegisteredNodeInfo() *base.RegisteredNodeInfo {
+	if m == nil {
+		return nil
+	}
+	var registered = base.RegisteredNodeInfo{
+		FreshNodeInfo: *m.ToFreshNodeInfo(),
+		ID:            m.ID,
+		Level:         m.Level,
+		SuperiorID:    m.SuperiorID,
+		Turn:          m.Turn,
+		IsActive:      m.IsActive,
+		Retry:         0,
+	}
+	return &registered
+}
