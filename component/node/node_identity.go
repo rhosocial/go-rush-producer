@@ -74,11 +74,11 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, err
 // startMaster 以"主节点"身份启动。
 //
 // master 为指定的"主节点"。
-func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, err error) error {
+func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause error) error {
 	isMasterFresh := false
-	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
+	if errors.Is(cause, ErrNodeLevelAlreadyHighest) {
 		// 什么也不做
-	} else if errors.Is(err, NodeInfo.ErrNodeSuperiorNotExist) || errors.Is(err, ErrNodeRequestResponseError) {
+	} else if errors.Is(cause, NodeInfo.ErrNodeSuperiorNotExist) || errors.Is(cause, ErrNodeRequestResponseError) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
 		// 发现相同套接字的其它节点。
 		node, err := master.GetNodeBySocket()
@@ -94,25 +94,27 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, err e
 			return NodeInfo.ErrNodeDatabaseError
 		}
 		isMasterFresh = true
-	} else if errors.Is(err, NodeInfo.ErrNodeDatabaseError) {
+	} else if errors.Is(cause, NodeInfo.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
-		return err
-	} else if errors.Is(err, ErrNodeMasterInvalid) {
+		return cause
+	} else if errors.Is(cause, ErrNodeMasterInvalid) {
 		// 主节点信息出错，直接退出。
-		return err
-	} else if errors.Is(err, ErrNodeMasterIsSelf) {
+		return cause
+	} else if errors.Is(cause, ErrNodeMasterIsSelf) {
 		// 主节点是自己，将自己作为主节点。但不更新数据库。
-	} else if errors.Is(err, ErrNodeRequestInvalid) {
+	} else if errors.Is(cause, ErrNodeRequestInvalid) {
 		// 构造请求出错，直接退出。
-		return err
-		// } else if errors.Is(err, ErrNodeRequestResponseError) {
+		return cause
+		// } else if errors.Is(cause, ErrNodeRequestResponseError) {
 		// 删除失效信息。
-	} else if errors.Is(err, ErrNodeMasterExisted) {
+	} else if errors.Is(cause, ErrNodeMasterExisted) {
 		// 主节点已存在，直接退出。
-		return err
-	} else if err != nil {
-		log.Println(err)
-		return err
+		return cause
+	} else if cause != nil {
+		log.Println(cause)
+		return cause
+	} else if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
+		// TODO: 刷新已存在节点。
 	}
 	n.Self.Node = master
 	n.Master.Node = n.Self.Node
@@ -125,38 +127,38 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, err e
 }
 
 // startSlave 将自己作为 master 的从节点。
-func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, err error) error {
-	if errors.Is(err, ErrNodeLevelAlreadyHighest) {
+func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause error) error {
+	if errors.Is(cause, ErrNodeLevelAlreadyHighest) {
 		// 已经是最高级，不存在上级主节点。
-		return err
-	} else if errors.Is(err, NodeInfo.ErrNodeSuperiorNotExist) {
+		return cause
+	} else if errors.Is(cause, NodeInfo.ErrNodeSuperiorNotExist) {
 		// 主节点不存在，直接退出。
-		return err
-	} else if errors.Is(err, NodeInfo.ErrNodeDatabaseError) {
+		return cause
+	} else if errors.Is(cause, NodeInfo.ErrNodeDatabaseError) {
 		// 数据库出错，直接退出。
-		return err
-	} else if errors.Is(err, ErrNodeMasterInvalid) {
+		return cause
+	} else if errors.Is(cause, ErrNodeMasterInvalid) {
 		// 主节点信息出错，直接退出。
-		return err
-	} else if errors.Is(err, ErrNodeMasterIsSelf) {
+		return cause
+	} else if errors.Is(cause, ErrNodeMasterIsSelf) {
 		// 主节点是自己，将自己作为主节点。但不更新数据库。
-		return err
-	} else if errors.Is(err, ErrNodeRequestInvalid) {
+		return cause
+	} else if errors.Is(cause, ErrNodeRequestInvalid) {
 		// 构造请求出错，直接退出。
-		return err
-	} else if errors.Is(err, ErrNodeMasterExisted) {
+		return cause
+	} else if errors.Is(cause, ErrNodeMasterExisted) {
 		// 主节点已存在，直接退出。
-		return err
-	} else if err != nil {
-		log.Println(err)
-		return err
+		return cause
+	} else if cause != nil {
+		log.Println(cause)
+		return cause
 	}
 	// 未出错，则接受主节点，并通知其将自己加入。
 	n.SwitchIdentitySlaveOn()
 	n.AcceptMaster(master)
-	_, err = n.NotifyMasterToAddSelfAsSlave()
-	if err != nil {
-		log.Fatalln(err)
+	_, cause = n.NotifyMasterToAddSelfAsSlave()
+	if cause != nil {
+		log.Fatalln(cause)
 	}
 
 	n.StartSlavesWorker(ctx)
@@ -283,7 +285,7 @@ func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 	if err != nil {
 		return
 	}
-	err = n.startMaster(context.Background(), real, nil)
+	err = n.startMaster(context.Background(), real, ErrNodeExistedMasterWithdrawn)
 	if err != nil {
 		return
 	}
