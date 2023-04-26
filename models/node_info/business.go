@@ -49,8 +49,8 @@ func (m *NodeInfo) Socket() string {
 }
 
 func (m *NodeInfo) Log() string {
-	return fmt.Sprintf("[GO-RUSH] %10d | %39s:%-5d | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
-		m.ID,
+	return fmt.Sprintf("[GO-RUSH] %10d [Version:%d] | %39s:%-5d | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
+		m.ID, m.Version.Int64,
 		m.Host, m.Port,
 		m.SuperiorID, m.Level, m.Turn, m.IsActive,
 	)
@@ -152,7 +152,7 @@ func (m *NodeInfo) IsSuperior(master *NodeInfo) bool {
 }
 
 func (m *NodeInfo) IsSubordinate(slave *NodeInfo) bool {
-	return m != nil && slave != nil && slave.Level > 1 && m.Level+1 == slave.Level && slave.SuperiorID == m.ID
+	return m != nil && slave != nil && slave.Level >= 1 && m.Level == slave.Level-1 && slave.SuperiorID == m.ID
 }
 
 // SupersedeMasterNode 主节点异常时从节点尝试接替。
@@ -172,9 +172,8 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 	return base.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
 		// 1. 判断提供的 master 是否与数据库对应，以及是否为我的上级。
 		var realMaster NodeInfo
-		tx = tx.Where(base.Socket(master.Host, master.Port)).Where("level = ?", master.Level).Take(&realMaster, master.ID)
-		if tx.Error != nil {
-			return tx.Error
+		if err := tx.Scopes(base.Socket(master.Host, master.Port)).Where("level = ?", master.Level).Take(&realMaster, master.ID).Error; err != nil {
+			return err
 		}
 		if !m.IsSuperior(&realMaster) {
 			return ErrMasterNodeIsNotSuperior
@@ -182,22 +181,19 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 		// 2. 记录上级ID和接替顺序，然后删除。
 		superiorID := realMaster.SuperiorID
 		turn := realMaster.Turn
-		tx = tx.Delete(realMaster)
-		if tx.Error != nil {
-			return tx.Error
+		if err := tx.Delete(realMaster).Error; err != nil {
+			return err
 		}
 		// 3. 将自己的级别提升，并尝试保存。
 		m.Level -= 1
 		m.SuperiorID = superiorID
 		m.Turn = turn
-		tx = tx.Save(m)
-		if tx.Error != nil {
+		if err := tx.Save(m).Error; err != nil {
 			return tx.Error
 		}
 		// 4. 修改其它节点的上级ID为自己。
-		tx = tx.Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Update("superior_id", m.ID)
-		if tx.Error != nil {
-			return tx.Error
+		if err := tx.Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Update("superior_id", m.ID).Error; err != nil {
+			return err
 		}
 		return nil
 	})
@@ -220,32 +216,51 @@ func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
 	return base.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
 		// 1. 判断提供的 candidate 是否与数据库对应，以及是否为我的下级。
 		var realSlave NodeInfo
-		tx = tx.Where(base.Socket(candidate.Host, candidate.Port)).Where("level = ?", candidate.Level).Take(&realSlave, candidate.ID)
-		if tx.Error != nil {
-			return tx.Error
+		if err := tx.Scopes(base.Socket(candidate.Host, candidate.Port)).Where("level = ?", candidate.Level).Take(&realSlave, candidate.ID).Error; err != nil {
+			return err
 		}
 		if !m.IsSubordinate(candidate) {
+			log.Printf("Master: [%d], Candidate: [%d]\n", m.ID, candidate.ID)
 			return ErrSlaveNodeIsNotSubordinate
 		}
 		// 2. 记录自己的ID和接替顺序，然后删除。
 		superiorID := m.SuperiorID
 		turn := m.Turn
-		tx = tx.Delete(m)
-		if tx.Error != nil {
-			return tx.Error
+		if err := tx.Delete(m).Error; err != nil {
+			return err
 		}
 		// 3. 将候选的级别提升，并尝试保存。
-		realSlave.Level -= 1
-		realSlave.SuperiorID = superiorID
-		realSlave.Turn = turn
-		tx = tx.Save(realSlave)
-		if tx.Error != nil {
-			return tx.Error
+		//stmt := tx.Session(&gorm.Session{
+		//	DryRun: true,
+		//}).Model(&realSlave).Updates(map[string]interface{}{
+		//	"level":       realSlave.Level - 1,
+		//	"turn":        turn,
+		//	"superior_id": superiorID,
+		//}).Statement
+		//log.Println(stmt.SQL.String())
+		//log.Println(stmt.Vars)
+		if err := tx.Model(&realSlave).Updates(map[string]interface{}{
+			"level":       realSlave.Level - 1,
+			"turn":        turn,
+			"superior_id": superiorID,
+		}).Error; err != nil {
+			return err
 		}
+		//log.Println(realSlave.Log())
 		// 4. 修改其它节点的上级ID为自己。
-		tx = tx.Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Update("superior_id", realSlave.ID)
-		if tx.Error != nil {
-			return tx.Error
+		//stmt := tx.Session(&gorm.Session{
+		//	DryRun: true,
+		//}).Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Statement
+		//log.Println(stmt.SQL.String())
+		//log.Println(stmt.Vars)
+		//var r NodeInfo
+		//if err := tx.Take(&r, realSlave.ID).Error; err != nil {
+		//	log.Println(err)
+		//} else {
+		//	log.Println(r.Log())
+		//}
+		if err := tx.Model(&NodeInfo{}).Where("id != ?", realSlave.ID).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Error; err != nil {
+			return err
 		}
 		return nil
 	})
@@ -361,4 +376,11 @@ func (m *NodeInfo) ToRegisteredNodeInfo() *base.RegisteredNodeInfo {
 		Retry:         0,
 	}
 	return &registered
+}
+
+func (m *NodeInfo) Refresh() error {
+	if err := base.NodeInfoDB.Take(m, m.ID).Error; err != nil {
+		return err
+	}
+	return nil
 }

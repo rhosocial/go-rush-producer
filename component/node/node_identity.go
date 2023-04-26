@@ -178,9 +178,17 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// TODO: 通知从节点接替以及其它从节点切换主节点
 	candidateID := n.Slaves.GetTurnCandidate()
-	go n.NotifyAllSlavesToSwitchSuperior(candidateID)
-	n.NotifySlaveToTakeoverSelf(candidateID)
-	n.Master.Node.RemoveSelf()
+	if candidateID == 0 {
+		n.Master.Node.RemoveSelf()
+	} else {
+		err := n.Handover(candidateID)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		n.NotifyAllSlavesToSwitchSuperior(candidateID)
+		n.NotifySlaveToTakeoverSelf(candidateID)
+	}
 	n.Self.Node.LogReportExistedMasterWithdrawn()
 	return nil
 }
@@ -276,22 +284,53 @@ func (n *Pool) Stop(ctx context.Context) {
 	}
 }
 
-// Handover 主节点向从节点移交。
-func (n *Pool) Handover() {
-	n.stopMaster(context.Background())
-}
-
 // Supersede 从节点接替主节点。
 func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 	if master == nil {
 		return
 	}
+	// 此时已删除，无法返回节点，只能相信传入的 master。
 	real, err := NodeInfo.GetNodeInfo(master.ID)
-	if err != nil {
+	if err != gorm.ErrRecordNotFound {
+		// 如果还存在，则不能取代。
+		log.Println(real.Log())
 		return
 	}
-	err = n.startMaster(context.Background(), real, ErrNodeExistedMasterWithdrawn)
-	if err != nil {
+	if err := n.Self.Node.Refresh(); err != nil {
+		log.Println(err)
 		return
 	}
+	err = n.stopSlave(context.Background())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	err = n.startMaster(context.Background(), n.Self.Node, ErrNodeExistedMasterWithdrawn)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+}
+
+func (n *Pool) Handover(candidate uint64) error {
+	if n.Master.Node == nil {
+		return ErrNodeMasterInvalid
+	}
+	if _, existed := n.Slaves.Nodes[candidate]; !existed {
+		return ErrNodeSlaveNodeInvalid
+	}
+	//log.Println("Handover: database preparing...")
+	err := n.Master.Node.HandoverMasterNode(n.Slaves.Nodes[candidate])
+	if err != nil {
+		log.Println("Handover error(s) reported:", err)
+		return err
+	}
+	//info, err := NodeInfo.GetNodeInfo(candidate)
+	//if err != nil {
+	//	return err
+	//} else {
+	//	log.Println(info.Log())
+	//}
+	//log.Println("Handover: database finished.")
+	return nil
 }

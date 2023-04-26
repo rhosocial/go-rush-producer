@@ -20,9 +20,9 @@ type NodeInfo struct {
 	NodeVersion string                 `gorm:"column:node_version;default:'';<-:create" json:"node_version"`
 	Host        string                 `gorm:"column:host;<-:create" json:"Host"`
 	Port        uint16                 `gorm:"column:port;<-:create" json:"Port"`
-	Level       uint8                  `gorm:"column:level;<-:create" json:"Level"`
-	SuperiorID  uint64                 `gorm:"column:superior_id;<-create" json:"superior_id"`
-	Turn        uint                   `gorm:"column:turn;<-:create" json:"turn"`
+	Level       uint8                  `gorm:"column:level" json:"Level"`
+	SuperiorID  uint64                 `gorm:"column:superior_id" json:"superior_id"`
+	Turn        uint                   `gorm:"column:turn" json:"turn"`
 	IsActive    uint8                  `gorm:"column:is_active;default:0" json:"is_active"`
 	CreatedAt   time.Time              `gorm:"column:created_at;autoCreateTime:milli" json:"created_at"`
 	UpdatedAt   time.Time              `gorm:"column:updated_at;autoUpdateTime:milli" json:"updated_at"`

@@ -353,6 +353,7 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 		}
 	}
 
+	// 需要确保此时已删除当前节点信息，同时更新好目标接替节点信息和其他节点信息。
 	resp, err := n.SendRequestSlaveNotifyMasterToTakeover(candidate)
 	if err != nil {
 		return false, err
