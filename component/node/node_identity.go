@@ -110,11 +110,16 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 	} else if errors.Is(cause, ErrNodeMasterExisted) {
 		// 主节点已存在，直接退出。
 		return cause
-	} else if cause != nil {
+	} else if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
+		// TODO: 刷新已存在节点，排除自己。
+		nodes, err := master.GetAllSlaveNodes()
+		if err != nil {
+			return err
+		}
+		n.Slaves.Refresh(nodes)
+	} else if cause != nil { // 此判断必须放在最后作为兜底。
 		log.Println(cause)
 		return cause
-	} else if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
-		// TODO: 刷新已存在节点。
 	}
 	n.Self.Node = master
 	n.Master.Node = n.Self.Node

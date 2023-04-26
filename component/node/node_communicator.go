@@ -339,9 +339,10 @@ func (n *Pool) NotifyMasterToRemoveSelf() (bool, error) {
 // NotifySlaveToTakeoverSelf 当前节点（主节点）通知从节点接替自己。
 func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	if n.Slaves.Count() == 0 {
+		log.Println("no slave nodes")
 		return true, nil
 	} // 如果没有从节点，则不必通知。
-
+	log.Printf("Notify slave[%d] to take over\n", candidateID)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	var candidate *NodeInfo.NodeInfo
@@ -365,6 +366,10 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error) {
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
+	if n.Slaves.Count() <= 1 {
+		log.Println("no other slaves to be notified to switch superior")
+		return true, nil
+	}
 	var candidate *NodeInfo.NodeInfo
 	for i, v := range n.Slaves.Nodes {
 		if i == candidateID {
@@ -381,6 +386,13 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 }
 
 func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *NodeInfo.NodeInfo) (bool, error) {
+	if slave == nil {
+		return false, ErrNodeSlaveNodeInvalid
+	}
+	if candidate == nil {
+		return false, ErrNodeMasterInvalid
+	}
+	log.Printf("Notify slave[%d] to switch superior[%d]\n", slave.SuperiorID, candidate.ID)
 	resp, err := n.SendRequestSlaveNotifyMasterToSwitchSuperior(slave, candidate) // 不关心响应。
 	if err != nil {
 		return false, err

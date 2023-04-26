@@ -1,11 +1,13 @@
 package controllerServer
 
 import (
-	base "github.com/rhosocial/go-rush-producer/models"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/rhosocial/go-rush-producer/component/node"
+	base "github.com/rhosocial/go-rush-producer/models"
 )
 
 type ActionMasterGetSlaveStatusResponseData struct {
@@ -23,11 +25,14 @@ func (c *ControllerServer) ActionMasterGetSlaveStatus(r *gin.Context) {
 func (c *ControllerServer) ActionMasterNotifySlaveToTakeover(r *gin.Context) {
 	// 1.
 	var existed base.RegisteredNodeInfo
-	if err := r.ShouldBind(&existed); err != nil {
+	if err := r.ShouldBindWith(&existed, binding.FormPost); err != nil {
 		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to bind post body", err.Error(), nil))
 		return
 	}
-	node.Nodes.Supersede()
+	if id, err := strconv.ParseUint(r.GetHeader("X-Node-ID"), 10, 64); err != nil && id != existed.ID {
+		r.AbortWithStatusJSON(http.StatusForbidden, c.NewResponseGeneric(r, 1, "invalid master node id", nil, nil))
+	}
+	node.Nodes.Supersede(&existed)
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
 }
 

@@ -22,12 +22,12 @@ type FreshNodeInfo struct {
 // RegisteredNodeInfo 已登记节点信息。
 type RegisteredNodeInfo struct {
 	FreshNodeInfo
-	ID         uint64 `json:"id" binding:"required"`
-	Level      uint8  `json:"level" binding:"required"`
-	SuperiorID uint64 `json:"superior_id" binding:"required"`
-	Turn       uint   `json:"turn" binding:"required"`
-	IsActive   uint8  `json:"is_active" binding:"required"`
-	Retry      uint8  `json:"retry"`
+	ID         uint64 `form:"id" json:"id"`
+	Level      uint8  `form:"level" json:"level"`
+	SuperiorID uint64 `form:"superior_id" json:"superior_id"`
+	Turn       uint   `form:"turn" json:"turn"`
+	IsActive   uint8  `form:"is_active" json:"is_active"`
+	Retry      uint8  `form:"retry" json:"retry"`
 }
 
 func Socket(host string, port uint16) func(db *gorm.DB) *gorm.DB {
