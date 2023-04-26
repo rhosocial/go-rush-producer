@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -51,10 +52,15 @@ func (n *FreshNodeInfo) Log() string {
 
 func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
 	if n != nil && target == nil || n == nil && target != nil {
+		if gin.Mode() == gin.DebugMode {
+			log.Println("One of the two is nil and the other is not.")
+		}
 		return false
 	}
-	log.Println("Origin: ", n.Log())
-	log.Println("Target: ", target.Log())
+	if gin.Mode() == gin.DebugMode {
+		log.Println("Origin: ", n.Log())
+		log.Println("Target: ", target.Log())
+	}
 	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
 }
 

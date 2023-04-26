@@ -171,7 +171,7 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 	return nil
 }
 
-func (n *Pool) stopMaster(ctx context.Context) error {
+func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	log.Println("stop master")
 	n.StopMasterWorker()
 	n.SwitchIdentityMasterOff()
@@ -189,16 +189,22 @@ func (n *Pool) stopMaster(ctx context.Context) error {
 		n.NotifyAllSlavesToSwitchSuperior(candidateID)
 		n.NotifySlaveToTakeoverSelf(candidateID)
 	}
-	n.Self.Node.LogReportExistedMasterWithdrawn()
+	if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
+		n.Self.Node.LogReportExistedMasterWithdrawn()
+	}
 	return nil
 }
 
-func (n *Pool) stopSlave(ctx context.Context) error {
+func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 	log.Println("stop slave")
 	n.StopSlavesWorker()
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
-	n.NotifyMasterToRemoveSelf()
+	if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
+		// 不删除自己。
+	} else {
+		n.NotifyMasterToRemoveSelf()
+	}
 	return nil
 }
 
@@ -272,15 +278,15 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 // 1. 若自己是 Master，则通知所有从节点停机或选择一个从节点并通知其接替自己。
 // 2. 若自己是 Slave，则通知主节点自己停机。
 // 3. 若身份未定，不做任何动作。
-func (n *Pool) Stop(ctx context.Context) {
+func (n *Pool) Stop(ctx context.Context, cause error) {
 	if n.IsIdentityNotDetermined() {
 		return
 	}
 	if n.IsIdentityMaster() {
-		n.stopMaster(ctx)
+		n.stopMaster(ctx, cause)
 	}
 	if n.IsIdentitySlave() {
-		n.stopSlave(ctx)
+		n.stopSlave(ctx, cause)
 	}
 }
 
@@ -300,7 +306,7 @@ func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 		log.Println(err)
 		return
 	}
-	err = n.stopSlave(context.Background())
+	err = n.stopSlave(context.Background(), ErrNodeExistedMasterWithdrawn)
 	if err != nil {
 		log.Println(err)
 		return

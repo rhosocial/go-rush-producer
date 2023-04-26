@@ -224,10 +224,12 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 	}, n, workerMasterCheckSlaves)
 }
 
+var ErrNodeWorkerStopped = errors.New("worker stopped")
+
 func (n *Pool) StopMasterWorker() {
 	n.Master.WorkerCancelFuncRWLock.Lock()
 	defer n.Master.WorkerCancelFuncRWLock.Unlock()
-	n.Master.WorkerCancelFunc(errors.New("stop"))
+	n.Master.WorkerCancelFunc(ErrNodeWorkerStopped)
 	n.Master.WorkerCancelFunc = nil
 }
 
@@ -253,7 +255,7 @@ func (n *Pool) StartSlavesWorker(ctx context.Context) {
 func (n *Pool) StopSlavesWorker() {
 	n.Slaves.WorkerCancelFuncRWLock.Lock()
 	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
-	n.Slaves.WorkerCancelFunc(errors.New("stop"))
+	n.Slaves.WorkerCancelFunc(ErrNodeWorkerStopped)
 	n.Slaves.WorkerCancelFunc = nil
 }
 

@@ -65,7 +65,7 @@ func main() {
 	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", *(*(*component.GlobalEnv).Net).ListenPort, 1)
 	node.Nodes = node.NewNodePool(self)
 	node.Nodes.Start(context.Background(), (*component.GlobalEnv).Identity)
-	defer node.Nodes.Stop(context.Background())
+	defer node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
 	// For-loop
 	if node.Nodes.Self.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.
@@ -111,7 +111,7 @@ func SetupCloseHandler() {
 	go func() {
 		<-c
 		log.Println("\r- Ctrl+C pressed in Terminal")
-		node.Nodes.Stop(context.Background())
+		node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
 		os.Exit(0)
 	}()
 }
