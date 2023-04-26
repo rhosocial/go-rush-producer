@@ -294,6 +294,15 @@ func (n *Pool) Stop(ctx context.Context, cause error) {
 	}
 }
 
+// TrySupersede 尝试数据库更新。若更新成功，则表示自己已经成功抢占为主节点。若报任何异常，均表示没有抢占成功，需要重新查找主节点。
+func (n *Pool) TrySupersede() error {
+	err := n.Self.Node.SupersedeMasterNode(n.Master.Node)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Supersede 从节点接替主节点。
 func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 	if master == nil {

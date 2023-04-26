@@ -160,7 +160,7 @@ func (m *NodeInfo) IsSubordinate(slave *NodeInfo) bool {
 //
 // 1. 查询 master 对应的 ID、Host、Port、Level 是否与数据表内一致。如果不一致，则报错。
 //
-// 2. 删除 master 记录。
+// 2. 记录 master 的ID、SuperiorID和turn，然后删除 master 记录
 //
 // 3. 修改自己的记录：level -=1，m.SuperiorID = master.SuperiorID，m.Turn = master.Turn。
 //
@@ -176,9 +176,10 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 			return ErrMasterNodeIsNotSuperior
 		}
 		// 2. 记录上级ID和接替顺序，然后删除。
+		prevID := realMaster.ID
 		superiorID := realMaster.SuperiorID
 		turn := realMaster.Turn
-		if err := tx.Delete(realMaster).Error; err != nil {
+		if err := tx.Delete(&realMaster).Error; err != nil {
 			return err
 		}
 		// 3. 将自己的级别提升，并尝试保存。
@@ -189,7 +190,7 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 			return tx.Error
 		}
 		// 4. 修改其它节点的上级ID为自己。
-		if err := tx.Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Update("superior_id", m.ID).Error; err != nil {
+		if err := tx.Model(&NodeInfo{}).Where("superior_id = ?", prevID).Update("superior_id", m.ID).Error; err != nil {
 			return err
 		}
 		return nil
@@ -246,11 +247,11 @@ func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
 		}
 		//log.Println(realSlave.Log())
 		// 4. 修改其它节点的上级ID为自己。
-		stmt := tx.Session(&gorm.Session{
-			DryRun: true,
-		}).Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Statement
-		log.Println(stmt.SQL.String())
-		log.Println(stmt.Vars)
+		//stmt := tx.Session(&gorm.Session{
+		//	DryRun: true,
+		//}).Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Statement
+		//log.Println(stmt.SQL.String())
+		//log.Println(stmt.Vars)
 		//var r NodeInfo
 		//if err := tx.Take(&r, realSlave.ID).Error; err != nil {
 		//	log.Println(err)
