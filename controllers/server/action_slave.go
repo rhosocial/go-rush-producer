@@ -47,5 +47,10 @@ func (c *ControllerServer) ActionMasterNotifySlaveToSwitchSuperior(r *gin.Contex
 	// 2. 在 m 时询问新 master。
 	// 3. 若新 master 准备好，且有自己。恢复原有容忍时长 n。
 	// 4. 若新 master 未准备好，等待 1 次。若再次未准备好。尝试接替。
+	err := node.Nodes.SwitchSuperior(&superseded)
+	if err != nil {
+		r.AbortWithStatusJSON(http.StatusInternalServerError, c.NewResponseGeneric(r, 1, "failed to switch superior", err.Error(), nil))
+		return
+	}
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
 }

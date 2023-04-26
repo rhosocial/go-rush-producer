@@ -55,3 +55,21 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 	}
 	return nil
 }
+
+func (m *NodeInfo) Subordinate() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("level = ?", m.Level+1).Where("superior_id = ?", m.ID)
+	}
+}
+
+func (m *NodeInfo) ActiveSubordinate() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return m.Subordinate()(db).Where("is_active = ?", FieldIsActiveActive)
+	}
+}
+
+func (m *NodeInfo) Superior() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("level = ?", m.Level-1).Where("id = ?", m.SuperiorID)
+	}
+}

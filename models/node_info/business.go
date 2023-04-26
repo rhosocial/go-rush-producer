@@ -83,16 +83,13 @@ func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 
 func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 	var slaveNodes []NodeInfo
-	var conditionActiveSlave = map[string]interface{}{
-		"Level":       m.Level + 1,
-		"superior_id": m.ID,
-	}
-	if tx := base.NodeInfoDB.Where(conditionActiveSlave).Find(&slaveNodes); tx.Error != nil {
+	if tx := base.NodeInfoDB.Scopes(m.Subordinate()).Find(&slaveNodes); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &slaveNodes, nil
 }
 
+// GetNodeInfo 根据指定ID获取NodeInfo记录。若指定ID的记录不存在，则报 gorm.ErrRecordNotFound。
 func GetNodeInfo(id uint64) (*NodeInfo, error) {
 	var record NodeInfo
 	if tx := base.NodeInfoDB.Take(&record, id); tx.Error != nil {
@@ -224,6 +221,7 @@ func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
 			return ErrSlaveNodeIsNotSubordinate
 		}
 		// 2. 记录自己的ID和接替顺序，然后删除。
+		prevID := m.ID
 		superiorID := m.SuperiorID
 		turn := m.Turn
 		if err := tx.Delete(m).Error; err != nil {
@@ -248,18 +246,18 @@ func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
 		}
 		//log.Println(realSlave.Log())
 		// 4. 修改其它节点的上级ID为自己。
-		//stmt := tx.Session(&gorm.Session{
-		//	DryRun: true,
-		//}).Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Statement
-		//log.Println(stmt.SQL.String())
-		//log.Println(stmt.Vars)
+		stmt := tx.Session(&gorm.Session{
+			DryRun: true,
+		}).Model(&NodeInfo{}).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Statement
+		log.Println(stmt.SQL.String())
+		log.Println(stmt.Vars)
 		//var r NodeInfo
 		//if err := tx.Take(&r, realSlave.ID).Error; err != nil {
 		//	log.Println(err)
 		//} else {
 		//	log.Println(r.Log())
 		//}
-		if err := tx.Model(&NodeInfo{}).Where("id != ?", realSlave.ID).Where("superior_id = ?", superiorID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Error; err != nil {
+		if err := tx.Model(&NodeInfo{}).Where("superior_id = ?", prevID).Where("level = ?", realSlave.Level+1).Update("superior_id", realSlave.ID).Error; err != nil {
 			return err
 		}
 		return nil

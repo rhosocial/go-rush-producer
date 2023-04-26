@@ -3,9 +3,10 @@ package node
 import (
 	"context"
 	"errors"
-	base "github.com/rhosocial/go-rush-producer/models"
 	"log"
 
+	"github.com/gin-gonic/gin"
+	base "github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/gorm"
 )
@@ -178,6 +179,9 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// TODO: 通知从节点接替以及其它从节点切换主节点
 	candidateID := n.Slaves.GetTurnCandidate()
+	if gin.Mode() == gin.DebugMode {
+		log.Println("Stop master, candidate:", candidateID)
+	}
 	if candidateID == 0 {
 		n.Master.Node.RemoveSelf()
 	} else {
@@ -200,7 +204,7 @@ func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 	n.StopSlavesWorker()
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
-	if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
+	if errors.Is(cause, ErrNodeTakeoverMaster) {
 		// 不删除自己。
 	} else {
 		n.NotifyMasterToRemoveSelf()
@@ -302,20 +306,25 @@ func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 		log.Println(real.Log())
 		return
 	}
+	// 刷新自己，已经是 master 。
 	if err := n.Self.Node.Refresh(); err != nil {
 		log.Println(err)
 		return
 	}
-	err = n.stopSlave(context.Background(), ErrNodeExistedMasterWithdrawn)
+	// 刷新成功，停止从节点身份。
+	err = n.stopSlave(context.Background(), ErrNodeTakeoverMaster)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	// 启动主节点身份。
 	err = n.startMaster(context.Background(), n.Self.Node, ErrNodeExistedMasterWithdrawn)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	// 此时从节点为空，需要刷新。
+	n.RefreshSlavesNodeInfo()
 }
 
 func (n *Pool) Handover(candidate uint64) error {
@@ -338,5 +347,19 @@ func (n *Pool) Handover(candidate uint64) error {
 	//	log.Println(info.Log())
 	//}
 	//log.Println("Handover: database finished.")
+	return nil
+}
+
+func (n *Pool) SwitchSuperior(master *base.RegisteredNodeInfo) error {
+	// 更新 master 节点：
+	if node, err := NodeInfo.GetNodeInfo(master.ID); err != nil {
+		return ErrNodeMasterInvalid
+	} else {
+		n.Master.Node = node
+	}
+	// 检查 master 节点。
+	if err := n.CheckMaster(n.Master.Node); err != nil {
+		return err
+	}
 	return nil
 }

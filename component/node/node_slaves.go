@@ -143,8 +143,12 @@ func (ps *PoolSlaves) Refresh(nodes *[]NodeInfo.NodeInfo) {
 			}
 		}
 	}
+	// TODO: 此处应该加锁，但加锁后会出现死锁，待排查。
+	//ps.NodesRWLock.Lock()
+	//defer ps.NodesRWLock.Unlock()
 	ps.Nodes = result
 	ps.NextTurn = turnMax + 1
+	ps.NodesRetry = make(map[uint64]uint8)
 }
 
 // Check 检查从节点是否有效。检查通过则返回节点信息 models.NodeInfo。

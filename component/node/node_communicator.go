@@ -148,6 +148,7 @@ var ErrNodeMasterDoesNotHaveSpecifiedSlave = errors.New("the specified slave nod
 var ErrNodeRequestInvalid = errors.New("invalid node request")
 var ErrNodeRequestResponseError = errors.New("node request response error")
 var ErrNodeExistedMasterWithdrawn = errors.New("existed master withdrawn")
+var ErrNodeTakeoverMaster = errors.New("takeover master")
 
 // ------ SlaveGetStatus ------ //
 
