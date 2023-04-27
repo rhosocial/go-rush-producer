@@ -183,7 +183,11 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	if gin.Mode() == gin.DebugMode {
 		log.Println("Stop master, candidate:", candidateID)
 	}
-	if candidateID == 0 { // 没有候选接替节点，直接停止。
+	if candidateID == 0 { // 没有候选接替节点，删除自己。
+		_, err := n.Self.Node.RemoveSelf()
+		if err != nil {
+			log.Println("Failed to stop self:", err)
+		}
 	} else {
 		err := n.Handover(candidateID)
 		if err != nil {
