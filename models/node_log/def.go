@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/plugin/optimisticlock"
 )
 
 const (
@@ -15,11 +17,13 @@ const (
 )
 
 type NodeLog struct {
-	ID           uint64    `gorm:"column:id;primaryKey;autoIncrement;<-:false" json:"id"`
-	NodeID       uint64    `gorm:"column:node_id;<-:create" json:"node_id"`
-	Type         uint8     `gorm:"column:type;<-:create" json:"type"`
-	TargetNodeID uint64    `gorm:"column:target_node_id;default:0;<-:create" json:"target_node_id"`
-	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime:milli" json:"created_at"`
+	ID           uint64                 `gorm:"column:id;primaryKey;autoIncrement;<-:false" json:"id"`
+	NodeID       uint64                 `gorm:"column:node_id;<-:create" json:"node_id"`
+	Type         uint8                  `gorm:"column:type;<-:create" json:"type"`
+	TargetNodeID uint64                 `gorm:"column:target_node_id;default:0;<-:create" json:"target_node_id"`
+	CreatedAt    time.Time              `gorm:"column:created_at;autoCreateTime:milli" json:"created_at"`
+	UpdatedAt    time.Time              `gorm:"column:updated_at;autoUpdateTime:milli" json:"updated_at"`
+	Version      optimisticlock.Version `gorm:"column:version;default:0" json:"version"`
 }
 
 func (m *NodeLog) TableName() string {

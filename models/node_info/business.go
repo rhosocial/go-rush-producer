@@ -312,7 +312,11 @@ func InitRegisteredWithModel(n *NodeInfo) *base.RegisteredNodeInfo {
 // ---- Log ---- //
 
 func (m *NodeInfo) LogReportActive() (int64, error) {
-	return m.NewNodeLog(models.NodeLogTypeReportActive, 0).Record()
+	log, err := m.GetLogActiveLatest()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return m.NewNodeLog(models.NodeLogTypeReportActive, 0).Record()
+	}
+	return log.Updated()
 }
 
 func (m *NodeInfo) LogReportFreshSlaveJoined(fresh *NodeInfo) (int64, error) {
