@@ -108,7 +108,6 @@ var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info
 func (n *Pool) CommitSelfAsMasterNode() bool {
 	n.Self.Upgrade()
 	if _, err := n.Self.Node.CommitSelfAsMasterNode(); err == nil {
-		n.Master.Node = n.Self.Node
 		return true
 	} else {
 		log.Println(err)

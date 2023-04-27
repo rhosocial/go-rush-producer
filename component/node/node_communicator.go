@@ -77,6 +77,7 @@ type RequestMasterStatusResponseData struct {
 
 // RequestMasterStatusResponseExtension 从节点请求主节点状态响应体的扩展部分。
 type RequestMasterStatusResponseExtension struct {
+	Master *models.RegisteredNodeInfo             `json:"master,omitempty"` // 已登记主节点信息。
 	Slaves *map[uint64]*models.RegisteredNodeInfo `json:"slaves,omitempty"` // 已登记从节点信息。
 }
 

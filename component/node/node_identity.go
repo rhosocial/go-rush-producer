@@ -183,8 +183,7 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	if gin.Mode() == gin.DebugMode {
 		log.Println("Stop master, candidate:", candidateID)
 	}
-	if candidateID == 0 {
-		n.Master.Node.RemoveSelf()
+	if candidateID == 0 { // 没有候选接替节点，直接停止。
 	} else {
 		err := n.Handover(candidateID)
 		if err != nil {
@@ -206,10 +205,8 @@ func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 	n.StopSlaveWorker()
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
-	if errors.Is(cause, ErrNodeTakeoverMaster) {
-		// 不删除自己。
-	} else {
-		// 其它原因停机需要通知主节点删除自己。忽略错误。
+	if errors.Is(cause, ErrNodeTakeoverMaster) { // 什么也不做。
+	} else { // 其它原因停机需要通知主节点删除自己。忽略错误。
 		n.NotifyMasterToRemoveSelf()
 	}
 	return nil
@@ -263,7 +260,7 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		} else if errors.Is(err, ErrNodeRequestInvalid) {
 			// 构造请求出错，直接退出。
 			return err
-		} else if errors.Is(err, ErrNodeRequestResponseError) {
+		} else if errors.Is(err, ErrNodeRequestResponseError) || errors.Is(err, ErrNodeMasterValidButRefused) {
 			// 请求响应失败，将自己作为主。将异常节点删除。
 			master.RemoveSelf()
 			return n.startMaster(ctx, n.Self.Node, ErrNodeRequestResponseError)
@@ -323,12 +320,13 @@ func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 		log.Println(err)
 		return
 	}
-	// 刷新成功，停止从节点身份。
+	// 刷新成功，停止从节点身份；清除主节点信息。
 	err = n.stopSlave(context.Background(), ErrNodeTakeoverMaster)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	n.Master.Clear()
 	// 启动主节点身份。
 	err = n.startMaster(context.Background(), n.Self.Node, ErrNodeExistedMasterWithdrawn)
 	if err != nil {
@@ -345,12 +343,13 @@ func (n *Pool) Handover(candidate uint64) error {
 	//	return ErrNodeMasterInvalid
 	//}
 	// 交接时，候选节点必须存在。若不存在，将报错。
-	if _, existed := n.Slaves.Nodes[candidate]; !existed {
+	node := n.Slaves.Get(candidate)
+	if node == nil {
 		return ErrNodeSlaveNodeInvalid
 	}
 	//log.Println("Handover: database preparing...")
 	// 若交接主节点报错，则认为已有其它节点。
-	err := n.Self.Node.HandoverMasterNode(n.Slaves.Get(candidate))
+	err := n.Self.Node.HandoverMasterNode(node)
 	if err != nil {
 		log.Println("Handover error(s) reported:", err)
 		return err
@@ -372,7 +371,7 @@ func (n *Pool) SwitchSuperior(master *base.RegisteredNodeInfo) error {
 	if node, err := NodeInfo.GetNodeInfo(master.ID); err != nil {
 		return ErrNodeMasterInvalid
 	} else {
-		n.Master.Node = node
+		n.AcceptMaster(node)
 	}
 	// 检查 master 节点。
 	if err := n.CheckMaster(n.Master.Node); err != nil {

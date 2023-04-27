@@ -25,6 +25,7 @@ func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 			ClientIP:   r.ClientIP(),
 			RemoteAddr: r.Request.RemoteAddr,
 		}, node.RequestMasterStatusResponseExtension{
+			Master: node.Nodes.Master.Node.ToRegisteredNodeInfo(),
 			Slaves: node.Nodes.Slaves.GetRegisteredNodeInfos(),
 		},
 	))

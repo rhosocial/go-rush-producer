@@ -34,6 +34,7 @@ func (ps *PoolSlaves) GetTurn() uint {
 	return ps.NextTurn
 }
 
+// GetTurnCandidate 获取候选接替顺序的节点ID。如果没有候选，则返回0。
 func (ps *PoolSlaves) GetTurnCandidate() uint64 {
 	ps.NodesRWLock.RLock()
 	defer ps.NodesRWLock.RUnlock()

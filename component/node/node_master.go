@@ -24,6 +24,10 @@ func (pm *PoolMaster) Accept(master *NodeInfo.NodeInfo) {
 	pm.Node = master
 }
 
+func (pm *PoolMaster) Clear() {
+	pm.Node = nil
+}
+
 // RetryUp 尝试次数递增。
 func (pm *PoolMaster) RetryUp() uint8 {
 	pm.RetryRWLock.Lock()
