@@ -11,7 +11,7 @@ import (
 
 type PoolSlaves struct {
 	NodesRWLock sync.RWMutex
-	Nodes       map[uint64]*NodeInfo.NodeInfo
+	Nodes       map[uint64]NodeInfo.NodeInfo
 	NodesRetry  map[uint64]uint8
 	NextTurn    uint
 
@@ -59,14 +59,18 @@ func (ps *PoolSlaves) IsWorking() bool {
 // ---- Worker ---- //
 
 func (ps *PoolSlaves) Get(id uint64) *NodeInfo.NodeInfo {
-	return ps.Nodes[id]
+	node, exist := ps.Nodes[id]
+	if !exist {
+		return nil
+	}
+	return &node
 }
 
 // RetryUpAll 所有节点重试次数加 1。
 func (ps *PoolSlaves) RetryUpAll() {
 	ps.NodesRWLock.Lock()
 	defer ps.NodesRWLock.Unlock()
-	for i, _ := range ps.Nodes {
+	for i := range ps.Nodes {
 		ps.NodesRetry[i] += 1
 	}
 }
@@ -107,23 +111,24 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 	return ps.NodesRetry[id]
 }
 
+// GetRegisteredNodeInfos 获取所有从节点信息。
 func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
 	ps.NodesRWLock.RLock()
 	defer ps.NodesRWLock.RUnlock()
 
 	slaves := make(map[uint64]*models.RegisteredNodeInfo)
 	for i, v := range ps.Nodes {
-		slaves[i] = NodeInfo.InitRegisteredWithModel(v)
+		slaves[i] = NodeInfo.InitRegisteredWithModel(&v)
 		slaves[i].Retry = ps.NodesRetry[i]
 	}
 	return &slaves
 }
 
 // AddSlaveNode 添加从节点信息。
-func (ps *PoolSlaves) AddSlaveNode(slave *NodeInfo.NodeInfo) bool {
-	if slave == nil {
-		return false
-	}
+func (ps *PoolSlaves) AddSlaveNode(slave NodeInfo.NodeInfo) bool {
+	//if slave == nil {
+	//	return false
+	//}
 	ps.NodesRWLock.Lock()
 	defer ps.NodesRWLock.Unlock()
 	ps.Nodes[slave.ID] = slave
@@ -133,11 +138,11 @@ func (ps *PoolSlaves) AddSlaveNode(slave *NodeInfo.NodeInfo) bool {
 // Refresh 刷新节点。
 // 刷新后会重新确定下一个顺序。
 func (ps *PoolSlaves) Refresh(nodes *[]NodeInfo.NodeInfo) {
-	result := make(map[uint64]*NodeInfo.NodeInfo)
+	result := make(map[uint64]NodeInfo.NodeInfo)
 	turnMax := uint(0)
 	for _, node := range *nodes {
 		if true { // TODO: 判断节点是否有效。
-			result[node.ID] = &node
+			result[node.ID] = node
 			if node.Turn > turnMax {
 				turnMax = node.Turn
 			}
@@ -160,9 +165,9 @@ func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*NodeInfo.N
 	// 检查指定ID是否存在，如果不是，则报错。
 	// slave, exist := n.Slaves[id]
 	slave := ps.Get(id)
-	if slave == nil {
-		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
-	}
+	//if slave == nil {
+	//	return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
+	//}
 	// 再检查 FreshNodeInfo 是否相同。
 	origin := models.FreshNodeInfo{
 		Name:        slave.Name,
@@ -177,7 +182,7 @@ func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*NodeInfo.N
 }
 
 func (ps *PoolSlaves) CheckIfExists(fresh *models.FreshNodeInfo) *NodeInfo.NodeInfo {
-	for id, _ := range ps.Nodes {
+	for id := range ps.Nodes {
 		if slave, err := ps.Check(id, fresh); err == nil {
 			return slave
 		}

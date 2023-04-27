@@ -151,7 +151,7 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, erro
 	if err != nil {
 		return nil, err
 	}
-	n.Slaves.Nodes[slave.ID] = &slave
+	n.Slaves.Nodes[slave.ID] = slave
 	n.Self.Node.LogReportFreshSlaveJoined(&slave)
 	return &slave, nil
 }
@@ -191,7 +191,7 @@ func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 	defer n.Slaves.NodesRWLock.Unlock()
 	for i, slave := range n.Slaves.Nodes {
 		if _, err := n.GetSlaveStatus(i); err != nil {
-			n.Self.Node.RemoveSlaveNode(slave)
+			n.Self.Node.RemoveSlaveNode(&slave)
 			delete(n.Slaves.Nodes, i)
 			removed = append(removed, i)
 		} else {

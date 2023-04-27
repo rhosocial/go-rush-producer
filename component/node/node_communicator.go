@@ -347,7 +347,7 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	log.Printf("Notify slave[%d] to take over\n", candidateID)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
-	var candidate *NodeInfo.NodeInfo
+	var candidate NodeInfo.NodeInfo
 	for i, v := range n.Slaves.Nodes {
 		if i == candidateID {
 			candidate = v
@@ -356,7 +356,7 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	}
 
 	// 需要确保此时已删除当前节点信息，同时更新好目标接替节点信息和其他节点信息。
-	resp, err := n.SendRequestSlaveNotifyMasterToTakeover(candidate)
+	resp, err := n.SendRequestSlaveNotifyMasterToTakeover(&candidate)
 	if err != nil {
 		return false, err
 	}
@@ -375,7 +375,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 		return true, nil
 	}
 	// 挑出候选节点。
-	var candidate *NodeInfo.NodeInfo
+	var candidate NodeInfo.NodeInfo
 	for i, v := range n.Slaves.Nodes {
 		if i == candidateID {
 			candidate = v
@@ -385,7 +385,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 	// 通知其它节点切换。并行发起切换通知请求。
 	for i, v := range n.Slaves.Nodes {
 		if i != candidateID {
-			go n.NotifySlaveToSwitchSuperior(v, candidate)
+			go n.NotifySlaveToSwitchSuperior(&v, &candidate)
 		}
 	}
 	return true, nil

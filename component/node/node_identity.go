@@ -350,7 +350,7 @@ func (n *Pool) Handover(candidate uint64) error {
 	}
 	//log.Println("Handover: database preparing...")
 	// 若交接主节点报错，则认为已有其它节点。
-	err := n.Self.Node.HandoverMasterNode(n.Slaves.Nodes[candidate])
+	err := n.Self.Node.HandoverMasterNode(n.Slaves.Get(candidate))
 	if err != nil {
 		log.Println("Handover error(s) reported:", err)
 		return err
