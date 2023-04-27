@@ -1,6 +1,8 @@
 package models
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	NodeLogTypeReportActive                         = 0 // 节点报告自己活跃

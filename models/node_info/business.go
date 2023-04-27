@@ -383,3 +383,11 @@ func (m *NodeInfo) Refresh() error {
 	}
 	return nil
 }
+
+func (m *NodeInfo) GetLogActiveLatest() (*models.NodeLog, error) {
+	var log models.NodeLog
+	if tx := base.NodeInfoDB.Scopes(m.LogActiveLatest()).First(&log); tx.Error != nil {
+		return nil, tx.Error
+	}
+	return &log, nil
+}

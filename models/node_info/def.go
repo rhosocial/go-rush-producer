@@ -4,6 +4,7 @@ import (
 	"time"
 
 	models "github.com/rhosocial/go-rush-producer/models/node_info_legacy"
+	NodeLog "github.com/rhosocial/go-rush-producer/models/node_log"
 	"gorm.io/gorm"
 	"gorm.io/plugin/optimisticlock"
 )
@@ -71,5 +72,11 @@ func (m *NodeInfo) ActiveSubordinate() func(db *gorm.DB) *gorm.DB {
 func (m *NodeInfo) Superior() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("level = ?", m.Level-1).Where("id = ?", m.SuperiorID)
+	}
+}
+
+func (m *NodeInfo) LogActiveLatest() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeReportActive).Order("created_at desc")
 	}
 }

@@ -230,7 +230,7 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 	n.Master.WorkerCancelFunc = cancel
 	go n.Master.worker(ctxChild, WorkerMasterIntervals{
 		Base: 1000,
-	}, n, workerMasterCheckSlaves)
+	}, n, workerMaster)
 }
 
 var ErrNodeWorkerStopped = errors.New("worker stopped")
