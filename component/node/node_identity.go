@@ -123,7 +123,8 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 		return cause
 	}
 	n.Self.Node = master
-	n.Master.Node = n.Self.Node
+	// 主节点身份不变。
+	// n.Master.Node = nil
 	n.SwitchIdentityMasterOn()
 	if isMasterFresh {
 		n.Self.Node.LogReportFreshMasterJoined()
@@ -167,7 +168,7 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 		log.Fatalln(cause)
 	}
 
-	n.StartSlavesWorker(ctx)
+	n.StartSlaveWorker(ctx)
 
 	return nil
 }
@@ -199,14 +200,16 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	return nil
 }
 
+// stopSlave 停止从节点。
 func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 	log.Println("stop slave")
-	n.StopSlavesWorker()
+	n.StopSlaveWorker()
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
 	if errors.Is(cause, ErrNodeTakeoverMaster) {
 		// 不删除自己。
 	} else {
+		// 其它原因停机需要通知主节点删除自己。忽略错误。
 		n.NotifyMasterToRemoveSelf()
 	}
 	return nil
@@ -336,15 +339,18 @@ func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 	n.RefreshSlavesNodeInfo()
 }
 
+// Handover 向 candidate 交接主节点身份。
 func (n *Pool) Handover(candidate uint64) error {
-	if n.Master.Node == nil {
-		return ErrNodeMasterInvalid
-	}
+	//if n.Master.Node == nil {
+	//	return ErrNodeMasterInvalid
+	//}
+	// 交接时，候选节点必须存在。若不存在，将报错。
 	if _, existed := n.Slaves.Nodes[candidate]; !existed {
 		return ErrNodeSlaveNodeInvalid
 	}
 	//log.Println("Handover: database preparing...")
-	err := n.Master.Node.HandoverMasterNode(n.Slaves.Nodes[candidate])
+	// 若交接主节点报错，则认为已有其它节点。
+	err := n.Self.Node.HandoverMasterNode(n.Slaves.Nodes[candidate])
 	if err != nil {
 		log.Println("Handover error(s) reported:", err)
 		return err
@@ -356,9 +362,11 @@ func (n *Pool) Handover(candidate uint64) error {
 	//	log.Println(info.Log())
 	//}
 	//log.Println("Handover: database finished.")
+	// 此时已认为交接成功。
 	return nil
 }
 
+// SwitchSuperior 切换主节点。master 为新的主节点登记信息。
 func (n *Pool) SwitchSuperior(master *base.RegisteredNodeInfo) error {
 	// 更新 master 节点：
 	if node, err := NodeInfo.GetNodeInfo(master.ID); err != nil {

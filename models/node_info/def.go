@@ -30,6 +30,7 @@ type NodeInfo struct {
 	Version     optimisticlock.Version `gorm:"column:version;default:0" json:"version"`
 }
 
+// TableName 数据表名。
 func (m *NodeInfo) TableName() string {
 	return "node_info"
 }
@@ -57,24 +58,28 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 	return nil
 }
 
+// Subordinate 附加当前节点的下级条件。
 func (m *NodeInfo) Subordinate() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("level = ?", m.Level+1).Where("superior_id = ?", m.ID)
 	}
 }
 
+// ActiveSubordinate 附加当前节点的活跃下级条件。
 func (m *NodeInfo) ActiveSubordinate() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return m.Subordinate()(db).Where("is_active = ?", FieldIsActiveActive)
 	}
 }
 
+// Superior 附加当前节点的上级条件。
 func (m *NodeInfo) Superior() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("level = ?", m.Level-1).Where("id = ?", m.SuperiorID)
 	}
 }
 
+// LogActiveLatest 附加当前节点报告活跃日志，按创建时间倒序排序。
 func (m *NodeInfo) LogActiveLatest() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeReportActive).Order("created_at desc")

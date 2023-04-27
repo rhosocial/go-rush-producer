@@ -220,6 +220,7 @@ func (n *Pool) RefreshSlavesNodeInfo() {
 
 // ---- Worker ---- //
 
+// StartMasterWorker 启动主节点身份工作协程。
 func (n *Pool) StartMasterWorker(ctx context.Context) {
 	n.Master.WorkerCancelFuncRWLock.Lock()
 	defer n.Master.WorkerCancelFuncRWLock.Unlock()
@@ -235,6 +236,7 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 
 var ErrNodeWorkerStopped = errors.New("worker stopped")
 
+// StopMasterWorker 停止主节点身份工作协程。
 func (n *Pool) StopMasterWorker() {
 	n.Master.WorkerCancelFuncRWLock.Lock()
 	defer n.Master.WorkerCancelFuncRWLock.Unlock()
@@ -242,7 +244,8 @@ func (n *Pool) StopMasterWorker() {
 	n.Master.WorkerCancelFunc = nil
 }
 
-func (n *Pool) StartSlavesWorker(ctx context.Context) {
+// StartSlaveWorker 启动从节点身份工作协程。
+func (n *Pool) StartSlaveWorker(ctx context.Context) {
 	n.Slaves.WorkerCancelFuncRWLock.Lock()
 	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
 	if n.Slaves.IsWorking() {
@@ -261,7 +264,8 @@ func (n *Pool) StartSlavesWorker(ctx context.Context) {
 	}, n, workerSlaveCheckMaster)
 }
 
-func (n *Pool) StopSlavesWorker() {
+// StopSlaveWorker 停止从节点身份工作协程。
+func (n *Pool) StopSlaveWorker() {
 	n.Slaves.WorkerCancelFuncRWLock.Lock()
 	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
 	n.Slaves.WorkerCancelFunc(ErrNodeWorkerStopped)

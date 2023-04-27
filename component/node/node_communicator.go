@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/rhosocial/go-rush-common/component/response"
 	"github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -365,6 +366,7 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	return true, nil
 }
 
+// NotifyAllSlavesToSwitchSuperior 通知其它从节点切换节点ID为 candidateID 的主节点。
 func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error) {
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
@@ -372,6 +374,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 		log.Println("no other slaves to be notified to switch superior")
 		return true, nil
 	}
+	// 挑出候选节点。
 	var candidate *NodeInfo.NodeInfo
 	for i, v := range n.Slaves.Nodes {
 		if i == candidateID {
@@ -379,6 +382,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 			break
 		}
 	}
+	// 通知其它节点切换。并行发起切换通知请求。
 	for i, v := range n.Slaves.Nodes {
 		if i != candidateID {
 			go n.NotifySlaveToSwitchSuperior(v, candidate)
@@ -387,6 +391,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 	return true, nil
 }
 
+// NotifySlaveToSwitchSuperior 通知某个从节点切换主节点为 candidate。
 func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *NodeInfo.NodeInfo) (bool, error) {
 	if slave == nil {
 		return false, ErrNodeSlaveNodeInvalid
@@ -399,7 +404,7 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 	if err != nil {
 		return false, err
 	}
-	if resp != nil {
+	if resp != nil && gin.Mode() == gin.DebugMode {
 		log.Println(resp.StatusCode, resp.Body)
 	}
 	return true, nil

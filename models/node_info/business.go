@@ -81,6 +81,7 @@ func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 	return &node, nil
 }
 
+// GetAllSlaveNodes 获取当前节点的所有从节点。
 func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 	var slaveNodes []NodeInfo
 	if tx := base.NodeInfoDB.Scopes(m.Subordinate()).Find(&slaveNodes); tx.Error != nil {
@@ -93,6 +94,7 @@ func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 func GetNodeInfo(id uint64) (*NodeInfo, error) {
 	var record NodeInfo
 	if tx := base.NodeInfoDB.Take(&record, id); tx.Error != nil {
+		log.Println(tx.Error)
 		return nil, tx.Error
 	}
 	return &record, nil
@@ -203,9 +205,9 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 //
 // 步骤如下：
 //
-// 1. 查询 candidate 对应的 ID、Host、Port、Level 是否与数据表内一致。如果不一致，则报错。
+// 1. 查询 candidate 对应的 ID、Host、Port、Level 是否与数据表内一致。如果不一致，则报 gorm.ErrRecordNotFound。如果不是自己的直接下属，则报 ErrSlaveNodeIsNotSubordinate。
 //
-// 2. 删除 master 记录。
+// 2. 删除 master 记录。如果查询记录已不存在，则不会报错。
 //
 // 3. 修改 candidate 的记录：level -=1，candidate.SuperiorID = master.SuperiorID，candidate.Turn = master.Turn。
 //
@@ -221,14 +223,14 @@ func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
 			log.Printf("Master: [%d], Candidate: [%d]\n", m.ID, candidate.ID)
 			return ErrSlaveNodeIsNotSubordinate
 		}
-		// 2. 记录自己的ID和接替顺序，然后删除。
+		// 2. 记录自己的ID和接替顺序，然后删除。删除不存在的记录不会报错。
 		prevID := m.ID
 		superiorID := m.SuperiorID
 		turn := m.Turn
 		if err := tx.Delete(m).Error; err != nil {
 			return err
 		}
-		// 3. 将候选的级别提升，并尝试保存。
+		// 3. 将候选的级别提升，并尝试保存。保存出错，则视为已经有其它主节点接替。
 		//stmt := tx.Session(&gorm.Session{
 		//	DryRun: true,
 		//}).Model(&realSlave).Updates(map[string]interface{}{
