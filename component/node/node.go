@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/gorm"
@@ -29,7 +30,7 @@ type Pool struct {
 
 var Nodes *Pool
 
-var ErrNetworkUnavailable = errors.New("network unavailable")
+var ErrNetworkUnavailable = errors.New("cannot find available network interface(s)")
 
 func ExternalIP() (net.IP, error) {
 	interfaces, err := net.Interfaces()
@@ -70,19 +71,28 @@ func getIpFromAddr(addr net.Addr) net.IP {
 	if ip == nil || ip.IsLoopback() {
 		return nil
 	}
-	ip = ip.To4()
-	if ip == nil {
+	if ip.IsLoopback() {
+		log.Println("loopback address found: ", ip)
+		return nil
+	}
+	ipv4 := ip.To4()
+	//ipv6 := ip.To16()
+	if ipv4 == nil {
 		return nil // not an ipv4 address
 	}
-	return ip
+	return ipv4
 }
 
 func (n *Pool) RefreshSelfSocket() error {
 	host, err := ExternalIP()
-	if err != nil {
+	if err != nil && (*component.GlobalEnv).Localhost == false {
 		return err
 	}
-	n.Self.Node.Host = host.String()
+	if host != nil {
+		n.Self.Node.Host = host.String()
+	} else {
+		n.Self.Node.Host = "127.0.0.1"
+	}
 	return nil
 }
 
@@ -99,7 +109,12 @@ func NewNodePool(self *NodeInfo.NodeInfo) *Pool {
 		Master: PoolMaster{},
 		Slaves: PoolSlaves{NodesRetry: make(map[uint64]uint8)},
 	}
-	nodes.RefreshSelfSocket()
+	nodes.Slaves.DetectInactiveCallback = nodes.DetectSlaveNodeInactiveCallback
+	err := nodes.RefreshSelfSocket()
+	if err != nil {
+		log.Fatalln(err)
+		return nil
+	}
 	return &nodes
 }
 
@@ -272,3 +287,11 @@ func (n *Pool) StopSlaveWorker() {
 }
 
 // ---- Worker ---- //
+
+// ---- Callback ---- //
+
+func (n *Pool) DetectSlaveNodeInactiveCallback(id uint64, retry uint8) {
+	n.Self.Node.LogReportExistedNodeMasterDetectedSlaveInactive(id, retry)
+}
+
+// ---- Callback ---- //

@@ -46,6 +46,7 @@ const (
 	RequestHeaderXAuthorizationTokenKey   = "X-Authorization-Token"
 	RequestHeaderXAuthorizationTokenValue = "$2a$04$jajGD06BJd.KmTM7pgCRzeFSIMWLAUbTCOQPNJRDMnMltPZp3tK1y"
 	RequestHeaderXNodeIDKey               = "X-Node-ID"
+	RequestHeaderXNodePortKey             = "X-Node-Port"
 )
 
 // ------ MasterStatus ------ //
@@ -73,6 +74,7 @@ type RequestMasterStatusResponseData struct {
 	Host       string `json:"host,omitempty"`        // 主节点自己的套接字。
 	ClientIP   string `json:"client_ip,omitempty"`   // 请求从节点的客户端IP地址。
 	RemoteAddr string `json:"remote_addr,omitempty"` // 请求从节点的远程地址（套接字）。
+	Attended   bool   `json:"attended"`              // 请求从节点是否已加入。
 }
 
 // RequestMasterStatusResponseExtension 从节点请求主节点状态响应体的扩展部分。
@@ -250,6 +252,7 @@ func (n *Pool) PrepareNodeRequest(method string, urlFormat string, socket string
 	req.Header.Add(RequestHeaderXAuthorizationTokenKey, RequestHeaderXAuthorizationTokenValue)
 	if n != nil && n.Self.Node.ID != 0 {
 		req.Header.Add(RequestHeaderXNodeIDKey, strconv.FormatUint(n.Self.Node.ID, 10))
+		req.Header.Add(RequestHeaderXNodePortKey, strconv.FormatUint(uint64(n.Self.Node.Port), 10))
 	}
 	if len(contentType) > 0 {
 		req.Header.Add("Content-Type", contentType)
@@ -384,9 +387,12 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 		}
 	}
 	// 通知其它节点切换。并行发起切换通知请求。
-	for i, v := range n.Slaves.Nodes {
+	// log.Println(n.Slaves.Nodes)
+	for i := range n.Slaves.Nodes {
 		if i != candidateID {
-			go n.NotifySlaveToSwitchSuperior(&v, &candidate)
+			// 这里不可以直接传递 v，因为这可能会导致访问到同一个map元素，而非按顺序遍历。
+			// go n.NotifySlaveToSwitchSuperior(&v, &candidate)
+			go n.NotifySlaveToSwitchSuperior(n.Slaves.Get(i), &candidate)
 		}
 	}
 	return true, nil
@@ -400,7 +406,7 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 	if candidate == nil {
 		return false, ErrNodeMasterInvalid
 	}
-	log.Printf("Notify slave[%d] to switch superior[%d]\n", slave.SuperiorID, candidate.ID)
+	log.Printf("Notify slave[%d] to switch superior[%d]\n", slave.ID, candidate.ID)
 	resp, err := n.SendRequestSlaveNotifyMasterToSwitchSuperior(slave, candidate) // 不关心响应。
 	if err != nil {
 		return false, err

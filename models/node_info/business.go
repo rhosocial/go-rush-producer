@@ -289,26 +289,6 @@ func (m *NodeInfo) RemoveSelf() (bool, error) {
 	return true, nil
 }
 
-func InitRegisteredWithModel(n *NodeInfo) *base.RegisteredNodeInfo {
-	if n == nil {
-		return nil
-	}
-	var registered = base.RegisteredNodeInfo{
-		FreshNodeInfo: base.FreshNodeInfo{
-			Name:        n.Name,
-			NodeVersion: n.NodeVersion,
-			Host:        n.Host,
-			Port:        n.Port,
-		},
-		ID:         n.ID,
-		Level:      n.Level,
-		SuperiorID: n.SuperiorID,
-		Turn:       n.Turn,
-		IsActive:   n.IsActive,
-	}
-	return &registered
-}
-
 // ---- Log ---- //
 
 func (m *NodeInfo) LogReportActive() (int64, error) {
@@ -317,6 +297,10 @@ func (m *NodeInfo) LogReportActive() (int64, error) {
 		return m.NewNodeLog(models.NodeLogTypeReportActive, 0).Record()
 	}
 	return log.Updated()
+}
+
+func (m *NodeInfo) LogReportExistedNodeMasterDetectedSlaveInactive(id uint64, retry uint8) (int64, error) {
+	return m.NewNodeLog(models.NodeLogTypeExistedNodeMasterReportSlaveInactive, id).Record()
 }
 
 func (m *NodeInfo) LogReportFreshSlaveJoined(fresh *NodeInfo) (int64, error) {

@@ -84,8 +84,8 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 // TODO: 3. 检查自己是否处于异常状况，即自己上次报告活跃是否远超阈值，同时刷新自己的数据表信息。
 func workerMaster(nodes *Pool) {
 	log.Println("Worker Master is working...")
-	go nodes.Slaves.RetryUpAll()               // 1. 调增所有子节点重试次数。
-	if nodes.Self.AliveUpAndClearIf(10) == 9 { // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
+	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(2, 3) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
+	if nodes.Self.AliveUpAndClearIf(10) == 9 {            // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
 		nodes.Self.Node.LogReportActive()
 	}
 	// TODO: 3. 检查自己是否处于异常状况，即自己上次报告活跃是否远超阈值，同时刷新自己的数据表信息。

@@ -30,6 +30,7 @@ type Env struct {
 	Net          *EnvNet                 `yaml:"Net,omitempty"`
 	MySQLServers *[]mysql.EnvMySQLServer `yaml:"MySQLServers,omitempty"`
 	Identity     int                     `yaml:"Identity,omitempty" default:"0"`
+	Localhost    bool                    `yaml:"Localhost,omitempty" default:"false"`
 	Master       *base.FreshNodeInfo     `yaml:"Master,omitempty"`
 }
 

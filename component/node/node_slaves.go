@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"log"
 	"math"
 	"sync"
 
@@ -17,6 +18,8 @@ type PoolSlaves struct {
 
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
+
+	DetectInactiveCallback func(id uint64, retry uint8)
 }
 
 // ---- Turn ---- //
@@ -112,6 +115,33 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 	return ps.NodesRetry[id]
 }
 
+func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(limitInactive uint8, limitRemoved uint8) *[]uint64 {
+	if limitInactive >= limitRemoved {
+		log.Printf("Warning! the limit of inactive(%d) is greater than or equal to limit of removed(%d).\n", limitInactive, limitRemoved)
+	}
+	ps.NodesRWLock.Lock()
+	defer ps.NodesRWLock.Unlock()
+	removed := make([]uint64, 0)
+	for i := range ps.Nodes {
+		ps.NodesRetry[i] += 1
+		node := ps.Get(i)
+		if ps.NodesRetry[i] >= limitInactive && ps.NodesRetry[i] < limitRemoved && node != nil && ps.DetectInactiveCallback != nil {
+			go ps.DetectInactiveCallback(i, ps.NodesRetry[i])
+		}
+		if ps.NodesRetry[i] >= limitRemoved {
+			if node != nil {
+				_, err := node.RemoveSelf()
+				if err != nil {
+					log.Println(err)
+				}
+			}
+			delete(ps.Nodes, i)
+			removed = append(removed, i)
+		}
+	}
+	return &removed
+}
+
 // GetRegisteredNodeInfos 获取所有从节点信息。
 func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNodeInfo {
 	ps.NodesRWLock.RLock()
@@ -119,7 +149,7 @@ func (ps *PoolSlaves) GetRegisteredNodeInfos() *map[uint64]*models.RegisteredNod
 
 	slaves := make(map[uint64]*models.RegisteredNodeInfo)
 	for i, v := range ps.Nodes {
-		slaves[i] = NodeInfo.InitRegisteredWithModel(&v)
+		slaves[i] = v.ToRegisteredNodeInfo()
 		slaves[i].Retry = ps.NodesRetry[i]
 	}
 	return &slaves
