@@ -175,6 +175,8 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 			return err
 		}
 		if !m.IsSuperior(&realMaster) {
+			log.Println(m)
+			log.Println(realMaster)
 			return ErrMasterNodeIsNotSuperior
 		}
 		// 2. 记录上级ID和接替顺序，然后删除。
@@ -296,7 +298,7 @@ func (m *NodeInfo) LogReportActive() (int64, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return m.NewNodeLog(models.NodeLogTypeReportActive, 0).Record()
 	}
-	return log.Updated()
+	return log.VersionUp()
 }
 
 func (m *NodeInfo) LogReportExistedNodeMasterDetectedSlaveInactive(id uint64, retry uint8) (int64, error) {
@@ -320,11 +322,19 @@ func (m *NodeInfo) LogReportExistedMasterWithdrawn() (int64, error) {
 }
 
 func (m *NodeInfo) LogReportExistedNodeSlaveReportMasterInactive(master *NodeInfo) (int64, error) {
-	return m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID).Record()
+	log, err := m.GetLogSlaveReportMasterInactive(master.ID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return m.NewNodeLog(models.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID).Record()
+	}
+	return log.VersionUp()
 }
 
 func (m *NodeInfo) LogReportExistedNodeMasterReportSlaveInactive(slave *NodeInfo) (int64, error) {
-	return m.NewNodeLog(models.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID).Record()
+	log, err := m.GetLogMasterReportSlaveInactive(slave.ID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return m.NewNodeLog(models.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID).Record()
+	}
+	return log.VersionUp()
 }
 
 func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *models.NodeLog {
@@ -377,6 +387,22 @@ func (m *NodeInfo) Refresh() error {
 func (m *NodeInfo) GetLogActiveLatest() (*models.NodeLog, error) {
 	var log models.NodeLog
 	if tx := base.NodeInfoDB.Scopes(m.LogActiveLatest()).First(&log); tx.Error != nil {
+		return nil, tx.Error
+	}
+	return &log, nil
+}
+
+func (m *NodeInfo) GetLogSlaveReportMasterInactive(targetID uint64) (*models.NodeLog, error) {
+	var log models.NodeLog
+	if tx := base.NodeInfoDB.Scopes(m.LogSlaveReportMasterInactiveLatest(targetID)).First(&log); tx.Error != nil {
+		return nil, tx.Error
+	}
+	return &log, nil
+}
+
+func (m *NodeInfo) GetLogMasterReportSlaveInactive(targetID uint64) (*models.NodeLog, error) {
+	var log models.NodeLog
+	if tx := base.NodeInfoDB.Scopes(m.LogMasterReportSlaveInactiveLatest(targetID)).First(&log); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &log, nil

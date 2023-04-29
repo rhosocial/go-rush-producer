@@ -14,7 +14,7 @@ func (m *NodeLog) Record() (int64, error) {
 	}
 }
 
-func (m *NodeLog) Updated() (int64, error) {
+func (m *NodeLog) VersionUp() (int64, error) {
 	if tx := base.NodeInfoDB.Model(m).Update("updated_at", time.Now()); tx.Error == nil {
 		return tx.RowsAffected, nil
 	} else {

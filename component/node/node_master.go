@@ -21,11 +21,13 @@ func (pm *PoolMaster) IsWorking() bool {
 }
 
 func (pm *PoolMaster) Accept(master *NodeInfo.NodeInfo) {
+	pm.Clear()
 	pm.Node = master
 }
 
 func (pm *PoolMaster) Clear() {
 	pm.Node = nil
+	pm.Retry = 0
 }
 
 // RetryUp 尝试次数递增。

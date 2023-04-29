@@ -173,7 +173,8 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, erro
 // AcceptMaster 接受主节点。
 func (n *Pool) AcceptMaster(master *NodeInfo.NodeInfo) {
 	n.Master.Accept(master)
-	n.Self.SetLevel(n.Master.Node.Level + 1)
+	n.Self.Node.Refresh()
+	n.RefreshSlavesNodeInfo()
 }
 
 // RemoveSlave 删除指定节点。删除前要校验客户端提供的信息。若未报错，则视为删除成功。

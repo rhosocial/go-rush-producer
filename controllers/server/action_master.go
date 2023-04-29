@@ -1,7 +1,6 @@
 package controllerServer
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
@@ -13,22 +12,18 @@ import (
 // ActionSlaveGetMasterStatus 从节点发起获取主节点（自己）状态的请求。
 // 应当返回请求节点的 r.Request.Host、r.ClientIP() 和 r.Request.RemoteAddr 供远程节点校验。
 func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
-	// TODO: 从请求的 Header 中解出 X-Node-ID，并校验。
 	attended := false
 	if nodeID, err := strconv.ParseUint(r.GetHeader(node.RequestHeaderXNodeIDKey), 10, 64); err == nil {
 		// 解析 nodeID 成功，则更新其重试次数。
 		node.Nodes.Slaves.RetryClear(nodeID)
-		if nodeID > 0 {
-			n := node.Nodes.Slaves.Get(nodeID)
-			if n != nil {
-				port, err := strconv.ParseUint(r.GetHeader(node.RequestHeaderXNodePortKey), 10, 16)
-				if err == nil && uint16(port) == n.Port {
-					attended = true
-				}
+		if n := node.Nodes.Slaves.Get(nodeID); n != nil {
+			port, err := strconv.ParseUint(r.GetHeader(node.RequestHeaderXNodePortKey), 10, 16)
+			if err == nil && uint16(port) == n.Port {
+				attended = true
 			}
 		}
 	}
-	log.Println(r.GetHeader(node.RequestHeaderXNodeIDKey), r.GetHeader(node.RequestHeaderXNodePortKey))
+	// log.Println(r.GetHeader(node.RequestHeaderXNodeIDKey), r.GetHeader(node.RequestHeaderXNodePortKey))
 	r.JSON(http.StatusOK, c.NewResponseGeneric(
 		r, 0, "success", node.RequestMasterStatusResponseData{
 			Host:       r.Request.Host,

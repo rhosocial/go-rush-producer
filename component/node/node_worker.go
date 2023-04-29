@@ -37,20 +37,22 @@ func workerSlaveCheckMaster(nodes *Pool) {
 		nodes.Master.RetryClear()
 	} else {
 		nodes.Master.RetryUp()
-		log.Println(err)
+		log.Println(err, nodes.Master.Retry)
 	}
 	// TODO: <参数点> 从节点检查主节点最大重试次数。
 	if nodes.Master.Retry >= 3 {
+		go nodes.Self.Node.LogReportExistedNodeSlaveReportMasterInactive(nodes.Master.Node)
 		// TODO: 重试次数过多，尝试主动接替。
+		log.Println("retried out, try to supersede:")
 		err := nodes.TrySupersede()
 		if err != nil {
 			// 表示已经有其它主节点，刷新主节点。
+			log.Println(err)
 			fresh, err := nodes.DiscoverMasterNode(false)
 			if err != nil {
 				return
 			}
-			nodes.Master.Accept(fresh)
-			nodes.Master.RetryClear()
+			nodes.AcceptMaster(fresh)
 			return
 		}
 		nodes.Supersede(nodes.Master.Node.ToRegisteredNodeInfo())

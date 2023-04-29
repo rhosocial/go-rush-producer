@@ -79,9 +79,21 @@ func (m *NodeInfo) Superior() func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-// LogActiveLatest 附加当前节点报告活跃日志，按创建时间倒序排序。
+// LogActiveLatest 附加当前节点报告活跃日志，按最后更新时间倒序排序。
 func (m *NodeInfo) LogActiveLatest() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeReportActive).Order("created_at desc")
+		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeReportActive).Order("updated_at desc")
+	}
+}
+
+func (m *NodeInfo) LogSlaveReportMasterInactiveLatest(targetID uint64) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeExistedNodeSlaveReportMasterInactive).Where("target_node_id = ?", targetID).Order("updated_at desc")
+	}
+}
+
+func (m *NodeInfo) LogMasterReportSlaveInactiveLatest(targetID uint64) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive).Where("target_node_id = ?", targetID).Order("updated_at desc")
 	}
 }
