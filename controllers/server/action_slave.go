@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/component/node"
 	base "github.com/rhosocial/go-rush-producer/models"
 )
@@ -18,12 +19,20 @@ type ActionMasterGetSlaveStatusResponseData struct {
 
 // ActionMasterGetSlaveStatus 当前节点（从节点）收到主节点获取本节点（从节点）状态请求。（仅对等网络有效）
 func (c *ControllerServer) ActionMasterGetSlaveStatus(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	remaining, removed := node.Nodes.RefreshSlavesStatus()
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", ActionMasterGetSlaveStatusResponseData{remaining, removed}, nil))
 }
 
 // ActionMasterNotifySlaveToTakeover 当前节点（从节点）收到主节点发起接替自己主节点身份请求。（仅对等网络有效）
 func (c *ControllerServer) ActionMasterNotifySlaveToTakeover(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	// 1.
 	var existed base.RegisteredNodeInfo
 	if err := r.ShouldBindWith(&existed, binding.FormPost); err != nil {
@@ -39,6 +48,10 @@ func (c *ControllerServer) ActionMasterNotifySlaveToTakeover(r *gin.Context) {
 
 // ActionMasterNotifySlaveToSwitchSuperior 当前节点（从节点）收到主节点发起向另一节点切换主节点身份请求。（仅对等网络有效）
 func (c *ControllerServer) ActionMasterNotifySlaveToSwitchSuperior(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	var superseded base.RegisteredNodeInfo
 	if err := r.ShouldBind(&superseded); err != nil {
 		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to bind post body", err.Error(), nil))

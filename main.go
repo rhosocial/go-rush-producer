@@ -53,6 +53,18 @@ func main() {
 		log.Fatalf("Cannot bind the listening port: %d\n", *(*(*component.GlobalEnv).Net).ListenPort)
 		return
 	}
+	configCluster((*component.GlobalEnv).Identity)
+	r = gin.New()
+	if !configEngine(r) {
+		return
+	}
+	r.Run(fmt.Sprintf(":%d", *(*(*component.GlobalEnv).Net).ListenPort))
+}
+
+func configCluster(identity int) {
+	if identity == 0 {
+		return
+	}
 	if component.GlobalEnv.MySQLServers == nil || len(*(component.GlobalEnv).MySQLServers) == 0 {
 		log.Fatalln("Cannot find MySQL connection.")
 		return
@@ -64,8 +76,8 @@ func main() {
 	models.NodeInfoDB = db
 	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", *(*(*component.GlobalEnv).Net).ListenPort, 1)
 	node.Nodes = node.NewNodePool(self)
-	node.Nodes.Start(context.Background(), (*component.GlobalEnv).Identity)
-	defer node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
+	node.Nodes.Start(context.Background(), identity)
+	// defer node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
 	// For-loop
 	if node.Nodes.Self.Identity == node.IdentityNotDetermined {
 		// Wait for a minute, and retry to determine the identity.
@@ -82,11 +94,6 @@ func main() {
 		log.Printf("Master: %s", node.Nodes.Master.Node.Log())
 		log.Printf("Self  : %s", node.Nodes.Self.Node.Log())
 	}
-	r = gin.New()
-	if !configEngine(r) {
-		return
-	}
-	r.Run(fmt.Sprintf(":%d", *(*(*component.GlobalEnv).Net).ListenPort))
 }
 
 func configEngine(r *gin.Engine) bool {
@@ -111,7 +118,9 @@ func SetupCloseHandler() {
 	go func() {
 		<-c
 		log.Println("\r- Ctrl+C pressed in Terminal")
-		node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
+		if (*component.GlobalEnv).Identity > 0 {
+			node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
+		}
 		os.Exit(0)
 	}()
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/component/node"
 	base "github.com/rhosocial/go-rush-producer/models"
 )
@@ -12,6 +13,10 @@ import (
 // ActionSlaveGetMasterStatus 从节点发起获取主节点（自己）状态的请求。
 // 应当返回请求节点的 r.Request.Host、r.ClientIP() 和 r.Request.RemoteAddr 供远程节点校验。
 func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	attended := false
 	if nodeID, err := strconv.ParseUint(r.GetHeader(node.RequestHeaderXNodeIDKey), 10, 64); err == nil {
 		// 解析 nodeID 成功，则更新其重试次数。
@@ -56,6 +61,10 @@ func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 // 当接受了从节点等级请求后，响应码为 200 OK。响应体为 JSON 字符串，格式和说明参见 node.NotifyMasterToAddSelfAsSlaveResponseData。
 // 若请求有误，则返回具体错误信息。
 func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	port, err := strconv.ParseUint(r.PostForm("port"), 10, 16)
 	if err != nil {
 		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, err.Error(), nil, nil))
@@ -88,6 +97,10 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 // ActionSlaveNotifyMasterModifySelf 从节点通知主节点（自己）修改自身信息。
 // TODO:可以修改的项待定。
 func (c *ControllerServer) ActionSlaveNotifyMasterModifySelf(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
 }
 
@@ -107,6 +120,10 @@ func (c *ControllerServer) ActionSlaveNotifyMasterModifySelf(r *gin.Context) {
 //
 // 以上四个参数必须与实际一直才能删除。
 func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
+	if (*component.GlobalEnv).Identity == 0 {
+		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
+		return
+	}
 	// 校验客户端信息
 	// 请求ID和Socket是否对应。如果不是，则返回禁止。
 	slaveID, err := strconv.ParseUint(r.Query("id"), 10, 64)
