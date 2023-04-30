@@ -4,16 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"strings"
 
 	base "github.com/rhosocial/go-rush-producer/models"
 	models "github.com/rhosocial/go-rush-producer/models/node_log"
 	"gorm.io/gorm"
 )
 
-const (
-	MinimumNumberOfActiveMasterNodes = 1
-)
-
+// NewNodeInfo creates a new NodeInfo instance.
 func NewNodeInfo(name string, port uint16, level uint8) *NodeInfo {
 	var node = NodeInfo{
 		Name:        name,
@@ -24,13 +23,13 @@ func NewNodeInfo(name string, port uint16, level uint8) *NodeInfo {
 	return &node
 }
 
+// IsSocketEqual determine whether the sockets of two nodes are equal.
 func (m *NodeInfo) IsSocketEqual(target *NodeInfo) bool {
 	return m.Host == target.Host && m.Port == target.Port
 }
 
-var ErrNodeNumberOfMasterNodeExceedsUpperLimit = errors.New("the number of active master nodes exceeds the upper limit")
-var ErrNodeNumberOfMasterNodeExceedsLowerLimit = errors.New("the number of active master nodes exceeds the lower limit")
-
+// GetPeerActiveNodes get all nodes at the same level as me.
+// If not found, an empty array is returned without error.
 func (m *NodeInfo) GetPeerActiveNodes() (*[]NodeInfo, error) {
 	var nodes []NodeInfo
 	var condition = map[string]interface{}{
@@ -45,6 +44,10 @@ func (m *NodeInfo) GetPeerActiveNodes() (*[]NodeInfo, error) {
 }
 
 func (m *NodeInfo) Socket() string {
+	ip := net.ParseIP(m.Host)
+	if ip != nil && strings.Contains(m.Host, ":") { // IPv6
+		return fmt.Sprintf("[%s]:%d", m.Host, m.Port)
+	}
 	return fmt.Sprintf("%s:%d", m.Host, m.Port)
 }
 
