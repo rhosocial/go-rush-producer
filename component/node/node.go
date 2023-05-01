@@ -14,15 +14,6 @@ import (
 )
 
 type Pool struct {
-	// Identity uint8
-	// Master                       *models.NodeInfo
-	// Self *models.NodeInfo
-	// SlavesRWMutex                sync.RWMutex
-	// Slaves                       map[uint64]models.NodeInfo
-	// WorkerMasterCancelFunc       context.CancelCauseFunc
-	// WorkerMasterCancelFuncRWLock sync.RWMutex
-	// WorkerSlaveCancelFunc        context.CancelCauseFunc
-	// WorkerSlaveCancelFuncRWLock  sync.RWMutex
 	Self   PoolSelf
 	Master PoolMaster
 	Slaves PoolSlaves

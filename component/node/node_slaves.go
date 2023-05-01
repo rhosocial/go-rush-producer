@@ -115,6 +115,11 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 	return ps.NodesRetry[id]
 }
 
+// RetryUpAllAndRemoveIfRetriedOut 重试次数调升，且在重试达到“不活跃上限”或“移除上限”后报告“不活跃”或“移除”。
+//
+// 注意 limitInacive 须比 limitRemoved 小，否则可能产生意想不到的后果。
+//
+// 返回被删除的节点ID数组指针。
 func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(limitInactive uint8, limitRemoved uint8) *[]uint64 {
 	if limitInactive >= limitRemoved {
 		log.Printf("Warning! the limit of inactive(%d) is greater than or equal to limit of removed(%d).\n", limitInactive, limitRemoved)

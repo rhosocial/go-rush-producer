@@ -263,12 +263,6 @@ func (n *Pool) PrepareNodeRequest(method string, urlFormat string, socket string
 	return req, err
 }
 
-func ParseNodeRequestResponse[T1 interface{}, T2 interface{}](resp *http.Response) (bool, error) {
-	response.UnmarshalResponseBodyBaseWithDataAndExtension[T1, T2](resp)
-
-	return true, nil
-}
-
 // ---- TODO 待确认下述代码用途 ---- //
 
 // GetSlaveStatus 当前节点（主节点）获取其从节点状态。

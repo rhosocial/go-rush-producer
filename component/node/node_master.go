@@ -8,23 +8,27 @@ import (
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
+// PoolMaster 节点池主节点身份。
 type PoolMaster struct {
-	Node                   *NodeInfo.NodeInfo
-	WorkerCancelFunc       context.CancelCauseFunc
-	WorkerCancelFuncRWLock sync.RWMutex
-	Retry                  uint8
-	RetryRWLock            sync.RWMutex
+	Node                   *NodeInfo.NodeInfo      // 节点
+	WorkerCancelFunc       context.CancelCauseFunc // 主节点身份协程取消句柄。
+	WorkerCancelFuncRWLock sync.RWMutex            // 操作主节点身份协程取消句柄锁
+	Retry                  uint8                   // 重试次数
+	RetryRWLock            sync.RWMutex            // 操作重试次数锁。
 }
 
+// IsWorking 主节点身份协程是否在工作中。
 func (pm *PoolMaster) IsWorking() bool {
 	return pm.WorkerCancelFunc != nil
 }
 
+// Accept 接受新的主节点。
 func (pm *PoolMaster) Accept(master *NodeInfo.NodeInfo) {
 	pm.Clear()
 	pm.Node = master
 }
 
+// Clear 清空节点和重试次数。
 func (pm *PoolMaster) Clear() {
 	pm.Node = nil
 	pm.Retry = 0

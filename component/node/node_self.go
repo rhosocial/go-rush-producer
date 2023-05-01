@@ -97,32 +97,6 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) error {
 	return nil
 }
 
-func (ps *PoolSelf) AliveClear() {
-	ps.AliveRWLock.Lock()
-	defer ps.AliveRWLock.Unlock()
-	ps.Alive = 0
-}
-
-func (ps *PoolSelf) AliveUp() uint8 {
-	ps.AliveRWLock.Lock()
-	defer ps.AliveRWLock.Unlock()
-	if ps.Alive == math.MaxUint8 {
-		return ps.Alive
-	}
-	ps.Alive += 1
-	return ps.Alive
-}
-
-func (ps *PoolSelf) AliveDown() uint8 {
-	ps.AliveRWLock.Lock()
-	defer ps.AliveRWLock.Unlock()
-	if ps.Alive == 0 {
-		return ps.Alive
-	}
-	ps.Alive -= 1
-	return ps.Alive
-}
-
 // AliveUpAndClearIf 活跃次数调升，并在达到阈值时清零。也即调用后返回值不会大于 threshold。
 // 注意，本次调用不能被其它操作 Alive 的方法嵌套调用，以防死锁。
 func (ps *PoolSelf) AliveUpAndClearIf(threshold uint8) uint8 {

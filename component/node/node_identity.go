@@ -173,6 +173,7 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 	return nil
 }
 
+// stopMaster 停止主节点。
 func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	log.Println("stop master")
 	n.StopMasterWorker()
