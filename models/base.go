@@ -2,11 +2,9 @@ package models
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -30,12 +28,6 @@ type RegisteredNodeInfo struct {
 	Retry      uint8  `form:"retry" json:"retry"`
 }
 
-func Socket(host string, port uint16) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("host = ? AND port = ?", host, port)
-	}
-}
-
 func (n *FreshNodeInfo) Encode() string {
 	params := make(url.Values)
 	params.Add("name", n.Name)
@@ -51,20 +43,12 @@ func (n *FreshNodeInfo) Log() string {
 
 func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
 	if n != nil && target == nil || n == nil && target != nil {
-		if gin.Mode() == gin.DebugMode {
-			log.Println("One of the two is nil and the other is not.")
-		}
 		return false
-	}
-	if gin.Mode() == gin.DebugMode {
-		log.Println("Origin: ", n.Log())
-		log.Println("Target: ", target.Log())
 	}
 	return n.Name == target.Name && n.NodeVersion == target.NodeVersion && n.Host == target.Host && n.Port == target.Port
 }
 
 // Log 输出信息。
-// TODO: 待补充 RegisteredNodeInfo 的 IsActive 字段友好输出。
 func (n *RegisteredNodeInfo) Log() string {
 	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Turn: %3d\n",
 		n.Host, n.Port, n.Name, n.NodeVersion,

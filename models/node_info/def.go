@@ -82,3 +82,9 @@ func (m *NodeInfo) LogMasterReportSlaveInactiveLatest(targetID uint64) func(db *
 		return db.Where("node_id = ?", m.ID).Where("type = ?", NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive).Where("target_node_id = ?", targetID).Order("updated_at desc")
 	}
 }
+
+func (m *NodeInfo) ScopeSocket() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("host = ? AND port = ?", m.Host, m.Port)
+	}
+}

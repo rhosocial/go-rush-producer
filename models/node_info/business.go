@@ -135,7 +135,7 @@ func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
 
 func (m *NodeInfo) GetNodeBySocket() (*NodeInfo, error) {
 	var node NodeInfo
-	if tx := base.NodeInfoDB.Scopes(base.Socket(m.Host, m.Port)).Take(&node); tx.Error != nil {
+	if tx := base.NodeInfoDB.Scopes(m.ScopeSocket()).Take(&node); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &node, nil
@@ -169,7 +169,7 @@ func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
 	return base.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
 		// 1. 判断提供的 master 是否与数据库对应，以及是否为我的上级。
 		var realMaster NodeInfo
-		if err := tx.Scopes(base.Socket(master.Host, master.Port)).Where("level = ?", master.Level).Take(&realMaster, master.ID).Error; err != nil {
+		if err := tx.Scopes(master.ScopeSocket()).Where("level = ?", master.Level).Take(&realMaster, master.ID).Error; err != nil {
 			return err
 		}
 		if !m.IsSuperior(&realMaster) {
@@ -216,7 +216,7 @@ func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
 	return base.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
 		// 1. 判断提供的 candidate 是否与数据库对应，以及是否为我的下级。
 		var realSlave NodeInfo
-		if err := tx.Scopes(base.Socket(candidate.Host, candidate.Port)).Where("level = ?", candidate.Level).Take(&realSlave, candidate.ID).Error; err != nil {
+		if err := tx.Scopes(candidate.ScopeSocket()).Where("level = ?", candidate.Level).Take(&realSlave, candidate.ID).Error; err != nil {
 			return err
 		}
 		if !m.IsSubordinate(candidate) {
