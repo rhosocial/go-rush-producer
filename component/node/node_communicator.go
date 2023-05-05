@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/rhosocial/go-rush-common/component/response"
 	"github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -405,7 +404,7 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 	if err != nil {
 		return false, err
 	}
-	if resp != nil && gin.Mode() == gin.DebugMode {
+	if resp != nil {
 		log.Println(resp.StatusCode, resp.Body)
 	}
 	return true, nil

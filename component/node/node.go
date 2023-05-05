@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/gin-gonic/gin"
 	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
@@ -210,14 +209,6 @@ func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 // RefreshSlavesNodeInfo 刷新从节点信息。
 func (n *Pool) RefreshSlavesNodeInfo() {
 	nodes, err := n.Self.Node.GetAllSlaveNodes()
-	if gin.Mode() == gin.DebugMode {
-		if err != nil {
-			log.Println(err)
-		}
-		if nodes != nil {
-			log.Println(nodes)
-		}
-	}
 	if err != nil {
 		return
 	}

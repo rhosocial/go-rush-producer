@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 
-	"github.com/gin-gonic/gin"
 	base "github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/gorm"
@@ -181,9 +180,6 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// TODO: 通知从节点接替以及其它从节点切换主节点
 	candidateID := n.Slaves.GetTurnCandidate()
-	if gin.Mode() == gin.DebugMode {
-		log.Println("Stop master, candidate:", candidateID)
-	}
 	if candidateID == 0 { // 没有候选接替节点，删除自己。
 		_, err := n.Self.Node.RemoveSelf()
 		if err != nil {
