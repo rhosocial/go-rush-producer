@@ -110,9 +110,9 @@ func NewNodePool(self *NodeInfo.NodeInfo) *Pool {
 
 var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info")
 
-func (n *Pool) CommitSelfAsMasterNode() bool {
+func (n *Pool) CommitSelfAsMasterNode(ctx context.Context) bool {
 	n.Self.Upgrade()
-	if _, err := n.Self.Node.CommitSelfAsMasterNode(); err == nil {
+	if _, err := n.Self.Node.CommitSelfAsMasterNode(ctx); err == nil {
 		return true
 	} else {
 		log.Println(err)
@@ -121,13 +121,13 @@ func (n *Pool) CommitSelfAsMasterNode() bool {
 }
 
 // AcceptSlave 接受从节点。
-func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, error) {
+func (n *Pool) AcceptSlave(ctx context.Context, node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, error) {
 	log.Println(node.Log())
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	// 检查 n.Slaves 是否存在该节点。
 	// 如果存在，则直接返回。
-	n.RefreshSlavesNodeInfo()
+	n.RefreshSlavesNodeInfo(ctx)
 	if slave := n.Slaves.CheckIfExists(node); slave != nil {
 		log.Println("The specified slave node record already exists.")
 		return slave, nil
@@ -141,30 +141,30 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, erro
 		Turn:        n.Slaves.GetTurn(),
 	}
 	// 需要判断数据库中是否存在相同套接字的条目。
-	existed, err := slave.GetNodeBySocket()
+	existed, err := slave.GetNodeBySocket(ctx)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// 如有，则要尝试与其通信。若通信成功，则拒绝接入。
-		err = n.CheckNodeStatus(existed)
+		err = n.CheckNodeStatus(ctx, existed)
 		if errors.Is(err, ErrNodeExisted) {
 			return nil, err
 		}
 	}
 
 	// 需要判断数据库中是否存在该条目。
-	_, err = n.Self.Node.AddSlaveNode(&slave)
+	_, err = n.Self.Node.AddSlaveNode(ctx, &slave)
 	if err != nil {
 		return nil, err
 	}
 	n.Slaves.Nodes[slave.ID] = slave
-	n.Self.Node.LogReportFreshSlaveJoined(&slave)
+	n.Self.Node.LogReportFreshSlaveJoined(ctx, &slave)
 	return &slave, nil
 }
 
 // AcceptMaster 接受主节点。
-func (n *Pool) AcceptMaster(master *NodeInfo.NodeInfo) {
+func (n *Pool) AcceptMaster(ctx context.Context, master *NodeInfo.NodeInfo) {
 	n.Master.Accept(master)
-	n.Self.Node.Refresh()
-	n.RefreshSlavesNodeInfo()
+	n.Self.Node.Refresh(ctx)
+	n.RefreshSlavesNodeInfo(ctx)
 }
 
 // RemoveSlave 删除指定节点。删除前要校验客户端提供的信息。若未报错，则视为删除成功。
@@ -172,7 +172,7 @@ func (n *Pool) AcceptMaster(master *NodeInfo.NodeInfo) {
 // 1. 检查节点是否有效。检查流程参见 Slaves.Check。
 //
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
-func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
+func (n *Pool) RemoveSlave(ctx context.Context, id uint64, fresh *models.FreshNodeInfo) (bool, error) {
 	log.Printf("Remove Slave: %d\n", id)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
@@ -180,23 +180,23 @@ func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	if _, err := n.Self.Node.RemoveSlaveNode(slave); err != nil {
+	if _, err := n.Self.Node.RemoveSlaveNode(ctx, slave); err != nil {
 		return false, err
 	}
 	delete(n.Slaves.Nodes, id)
-	n.Self.Node.LogReportExistedSlaveWithdrawn(slave)
+	n.Self.Node.LogReportExistedSlaveWithdrawn(ctx, slave)
 	return true, nil
 }
 
 // RefreshSlavesStatus 刷新从节点状态。
-func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
+func (n *Pool) RefreshSlavesStatus(ctx context.Context) ([]uint64, []uint64) {
 	remaining := make([]uint64, 0)
 	removed := make([]uint64, 0)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	for i, slave := range n.Slaves.Nodes {
 		if _, err := n.GetSlaveStatus(i); err != nil {
-			n.Self.Node.RemoveSlaveNode(&slave)
+			n.Self.Node.RemoveSlaveNode(ctx, &slave)
 			delete(n.Slaves.Nodes, i)
 			removed = append(removed, i)
 		} else {
@@ -207,8 +207,8 @@ func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 }
 
 // RefreshSlavesNodeInfo 刷新从节点信息。
-func (n *Pool) RefreshSlavesNodeInfo() {
-	nodes, err := n.Self.Node.GetAllSlaveNodes()
+func (n *Pool) RefreshSlavesNodeInfo(ctx context.Context) {
+	nodes, err := n.Self.Node.GetAllSlaveNodes(ctx)
 	if err != nil {
 		return
 	}
@@ -273,8 +273,8 @@ func (n *Pool) StopSlaveWorker() {
 
 // ---- Callback ---- //
 
-func (n *Pool) DetectSlaveNodeInactiveCallback(id uint64, retry uint8) {
-	n.Self.Node.LogReportExistedNodeMasterDetectedSlaveInactive(id, retry)
+func (n *Pool) DetectSlaveNodeInactiveCallback(ctx context.Context, id uint64, retry uint8) {
+	n.Self.Node.LogReportExistedNodeMasterDetectedSlaveInactive(ctx, id, retry)
 }
 
 // ---- Callback ---- //

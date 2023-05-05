@@ -1,6 +1,7 @@
 package controllerServer
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -61,6 +62,7 @@ func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 // 当接受了从节点等级请求后，响应码为 200 OK。响应体为 JSON 字符串，格式和说明参见 node.NotifyMasterToAddSelfAsSlaveResponseData。
 // 若请求有误，则返回具体错误信息。
 func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
+	ctx := context.Background()
 	if (*component.GlobalEnv).Identity == 0 {
 		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
 		return
@@ -77,7 +79,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterAddSelf(r *gin.Context) {
 		Host:        r.ClientIP(),
 		Port:        uint16(port),
 	}
-	slave, err := node.Nodes.AcceptSlave(&fresh)
+	slave, err := node.Nodes.AcceptSlave(ctx, &fresh)
 	if err != nil {
 		r.Error(err)
 		r.AbortWithStatusJSON(http.StatusInternalServerError, c.NewResponseGeneric(r, 1, "failed to accept slave", err.Error(), nil))
@@ -120,6 +122,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterModifySelf(r *gin.Context) {
 //
 // 以上四个参数必须与实际一直才能删除。
 func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
+	ctx := context.Background()
 	if (*component.GlobalEnv).Identity == 0 {
 		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
 		return
@@ -144,7 +147,7 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 		Name:        r.Query("name"),
 		NodeVersion: r.Query("node_version"),
 	}
-	if _, err := node.Nodes.RemoveSlave(slaveID, &fresh); err != nil {
+	if _, err := node.Nodes.RemoveSlave(ctx, slaveID, &fresh); err != nil {
 		r.Error(err)
 		r.AbortWithStatusJSON(http.StatusInternalServerError, c.NewResponseGeneric(r, 1, "failed to remove slave", err.Error(), nil))
 		return

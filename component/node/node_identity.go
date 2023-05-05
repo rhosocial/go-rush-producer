@@ -56,12 +56,12 @@ func (n *Pool) IsIdentityNotDetermined() bool {
 // 2. 查阅数据库。如果查找不到记录，则报 models.ErrNodeSuperiorNotExist。如果数据库出错，则据实报错。
 //
 // 3. 如果存在主节点数据，则尝试检查主节点。参见 CheckMaster。
-func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, error) {
+func (n *Pool) DiscoverMasterNode(ctx context.Context, specifySuperior bool) (*NodeInfo.NodeInfo, error) {
 	log.Println("Discover master...")
 	if n.Self.Node.Level == 0 {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	if node, err := n.Self.Node.GetSuperiorNode(specifySuperior); err == nil {
+	if node, err := n.Self.Node.GetSuperiorNode(ctx, specifySuperior); err == nil {
 		log.Print("Discovered master: ", node.Log())
 		err = n.CheckMaster(node)
 		return node, err
@@ -81,16 +81,16 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 	} else if errors.Is(cause, NodeInfo.ErrNodeSuperiorNotExist) || errors.Is(cause, ErrNodeRequestResponseError) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
 		// 发现相同套接字的其它节点。
-		node, err := master.GetNodeBySocket()
+		node, err := master.GetNodeBySocket(ctx)
 		log.Println(node, err)
 		if err != gorm.ErrRecordNotFound {
 			// 若发现其它相同套接字节点，则应尝试通信。如果能获取节点状态，则应退出。
-			err := n.CheckNodeStatus(node)
+			err := n.CheckNodeStatus(ctx, node)
 			if err != nil {
 				log.Println(err)
 			}
 		}
-		if !n.CommitSelfAsMasterNode() {
+		if !n.CommitSelfAsMasterNode(ctx) {
 			return NodeInfo.ErrNodeDatabaseError
 		}
 		isMasterFresh = true
@@ -112,7 +112,7 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 		return cause
 	} else if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
 		// TODO: 刷新已存在节点，排除自己。
-		nodes, err := master.GetAllSlaveNodes()
+		nodes, err := master.GetAllSlaveNodes(ctx)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 	// n.Master.Node = nil
 	n.SwitchIdentityMasterOn()
 	if isMasterFresh {
-		n.Self.Node.LogReportFreshMasterJoined()
+		n.Self.Node.LogReportFreshMasterJoined(ctx)
 	}
 	n.StartMasterWorker(ctx)
 	return nil
@@ -161,8 +161,8 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 	}
 	// 未出错，则接受主节点，并通知其将自己加入。
 	n.SwitchIdentitySlaveOn()
-	n.AcceptMaster(master)
-	_, cause = n.NotifyMasterToAddSelfAsSlave()
+	n.AcceptMaster(ctx, master)
+	_, cause = n.NotifyMasterToAddSelfAsSlave(ctx)
 	if cause != nil {
 		log.Fatalln(cause)
 	}
@@ -181,12 +181,12 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	// TODO: 通知从节点接替以及其它从节点切换主节点
 	candidateID := n.Slaves.GetTurnCandidate()
 	if candidateID == 0 { // 没有候选接替节点，删除自己。
-		_, err := n.Self.Node.RemoveSelf()
+		_, err := n.Self.Node.RemoveSelf(ctx)
 		if err != nil {
 			log.Println("Failed to stop self:", err)
 		}
 	} else {
-		err := n.Handover(candidateID)
+		err := n.Handover(ctx, candidateID)
 		if err != nil {
 			log.Println(err)
 			return err
@@ -195,7 +195,7 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 		n.NotifySlaveToTakeoverSelf(candidateID)
 	}
 	if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
-		n.Self.Node.LogReportExistedMasterWithdrawn()
+		n.Self.Node.LogReportExistedMasterWithdrawn(ctx)
 	}
 	return nil
 }
@@ -220,7 +220,7 @@ func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 // 2. n.Self 已准备好。
 // 3. 若指定为从节点模式，则 n.Master 也应当准备好。
 func (n *Pool) Start(ctx context.Context, identity int) error {
-	master, err := n.DiscoverMasterNode(false)
+	master, err := n.DiscoverMasterNode(ctx, false)
 	if identity == IdentityMaster { // 指定为 Master。
 		// 发现主节点。
 		// 如果主节点已存在，则尝试连接。
@@ -263,7 +263,7 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 			return err
 		} else if errors.Is(err, ErrNodeRequestResponseError) || errors.Is(err, ErrNodeMasterValidButRefused) {
 			// 请求响应失败，将自己作为主。将异常节点删除。
-			master.RemoveSelf()
+			master.RemoveSelf(ctx)
 			return n.startMaster(ctx, n.Self.Node, ErrNodeRequestResponseError)
 		} else if errors.Is(err, ErrNodeMasterExisted) {
 			// 主节点已存在，设置自己为从节点。
@@ -296,8 +296,8 @@ func (n *Pool) Stop(ctx context.Context, cause error) {
 }
 
 // TrySupersede 尝试数据库更新。若更新成功，则表示自己已经成功抢占为主节点。若报任何异常，均表示没有抢占成功，需要重新查找主节点。
-func (n *Pool) TrySupersede() error {
-	err := n.Self.Node.SupersedeMasterNode(n.Master.Node)
+func (n *Pool) TrySupersede(ctx context.Context) error {
+	err := n.Self.Node.SupersedeMasterNode(ctx, n.Master.Node)
 	if err != nil {
 		return err
 	}
@@ -305,41 +305,41 @@ func (n *Pool) TrySupersede() error {
 }
 
 // Supersede 从节点接替主节点。
-func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
+func (n *Pool) Supersede(ctx context.Context, master *base.RegisteredNodeInfo) {
 	if master == nil {
 		return
 	}
 	// 此时已删除，无法返回节点，只能相信传入的 master。
-	real, err := NodeInfo.GetNodeInfo(master.ID)
+	real, err := NodeInfo.GetNodeInfo(ctx, master.ID)
 	if err != gorm.ErrRecordNotFound {
 		// 如果还存在，则不能取代。
 		log.Println(real.Log())
 		return
 	}
 	// 刷新自己，已经是 master 。
-	if err := n.Self.Node.Refresh(); err != nil {
+	if err := n.Self.Node.Refresh(ctx); err != nil {
 		log.Println(err)
 		return
 	}
 	// 刷新成功，停止从节点身份；清除主节点信息。
-	err = n.stopSlave(context.Background(), ErrNodeTakeoverMaster)
+	err = n.stopSlave(ctx, ErrNodeTakeoverMaster)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	n.Master.Clear()
 	// 启动主节点身份。
-	err = n.startMaster(context.Background(), n.Self.Node, ErrNodeExistedMasterWithdrawn)
+	err = n.startMaster(ctx, n.Self.Node, ErrNodeExistedMasterWithdrawn)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	// 此时从节点为空，需要刷新。
-	n.RefreshSlavesNodeInfo()
+	n.RefreshSlavesNodeInfo(ctx)
 }
 
 // Handover 向 candidate 交接主节点身份。
-func (n *Pool) Handover(candidate uint64) error {
+func (n *Pool) Handover(ctx context.Context, candidate uint64) error {
 	//if n.Master.Node == nil {
 	//	return ErrNodeMasterInvalid
 	//}
@@ -350,7 +350,7 @@ func (n *Pool) Handover(candidate uint64) error {
 	}
 	//log.Println("Handover: database preparing...")
 	// 若交接主节点报错，则认为已有其它节点。
-	err := n.Self.Node.HandoverMasterNode(node)
+	err := n.Self.Node.HandoverMasterNode(ctx, node)
 	if err != nil {
 		log.Println("Handover error(s) reported:", err)
 		return err
@@ -367,12 +367,12 @@ func (n *Pool) Handover(candidate uint64) error {
 }
 
 // SwitchSuperior 切换主节点。master 为新的主节点登记信息。
-func (n *Pool) SwitchSuperior(master *base.RegisteredNodeInfo) error {
+func (n *Pool) SwitchSuperior(ctx context.Context, master *base.RegisteredNodeInfo) error {
 	// 更新 master 节点：
-	if node, err := NodeInfo.GetNodeInfo(master.ID); err != nil {
+	if node, err := NodeInfo.GetNodeInfo(ctx, master.ID); err != nil {
 		return ErrNodeMasterInvalid
 	} else {
-		n.AcceptMaster(node)
+		n.AcceptMaster(ctx, node)
 	}
 	// 检查 master 节点。
 	if err := n.CheckMaster(n.Master.Node); err != nil {
