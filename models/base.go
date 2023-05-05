@@ -27,7 +27,6 @@ type RegisteredNodeInfo struct {
 	Level      uint8  `form:"level" json:"level"`
 	SuperiorID uint64 `form:"superior_id" json:"superior_id"`
 	Turn       uint   `form:"turn" json:"turn"`
-	IsActive   uint8  `form:"is_active" json:"is_active"`
 	Retry      uint8  `form:"retry" json:"retry"`
 }
 
@@ -67,9 +66,9 @@ func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
 // Log 输出信息。
 // TODO: 待补充 RegisteredNodeInfo 的 IsActive 字段友好输出。
 func (n *RegisteredNodeInfo) Log() string {
-	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
+	return fmt.Sprintf("Regst Node: %39s:%-5d | %s @ %s | Superior: %10d | Level: %3d | Turn: %3d\n",
 		n.Host, n.Port, n.Name, n.NodeVersion,
-		n.SuperiorID, n.Level, n.Turn, n.IsActive,
+		n.SuperiorID, n.Level, n.Turn,
 	)
 }
 
@@ -83,6 +82,5 @@ func (n *RegisteredNodeInfo) Encode() string {
 	params.Add("level", strconv.Itoa(int(n.Level)))
 	params.Add("superior_id", strconv.FormatUint(n.SuperiorID, 10))
 	params.Add("turn", strconv.FormatUint(uint64(n.Turn), 10))
-	params.Add("is_active", strconv.Itoa(int(n.IsActive)))
 	return params.Encode()
 }

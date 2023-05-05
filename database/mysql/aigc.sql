@@ -9,7 +9,6 @@ create table aigc.node_info
     level        tinyint unsigned                               not null comment '节点级别（0-master，1-slave）',
     superior_id  bigint unsigned   default '0'                  not null comment '上级ID。0表示没有上级。',
     turn         int unsigned      default '0'                  not null comment '上级主节点失效后的接替顺序（数值越小优先级越高）',
-    is_active    tinyint unsigned  default '0'                  not null comment '是否活跃（0-活跃，1-上级主节点发现失效，2-下级从节点发现失效）',
     created_at   timestamp(3)      default CURRENT_TIMESTAMP(3) not null comment '创建时间',
     updated_at   timestamp(3)      default CURRENT_TIMESTAMP(3) not null on update CURRENT_TIMESTAMP(3) comment '最后更新时间',
     version      bigint unsigned   default '0'                  not null comment '本条记录版本。从0开始。',
@@ -19,10 +18,6 @@ create table aigc.node_info
         unique (host, port) comment '节点套接字索引'
 )
     comment '节点信息';
-
-create index node_active_index
-    on aigc.node_info (is_active)
-    comment '节点活跃索引';
 
 create index node_info_id_index
     on aigc.node_info (id);
@@ -38,16 +33,11 @@ create table aigc.node_info_legacy
     level        tinyint unsigned                               not null comment '（删除前最后一刻）节点级别（0-master，1-slave）',
     superior_id  bigint unsigned   default '0'                  not null comment '（删除前最后一刻）上级ID。0表示没有上级。',
     turn         int unsigned      default '0'                  not null comment '（删除前最后一刻）上级主节点失效后的接替顺序（数值越小优先级越高）',
-    is_active    tinyint unsigned  default '0'                  not null comment '（删除前最后一刻）是否活跃（0-活跃，1-上级主节点发现失效，2-下级从节点发现失效）',
     created_at   timestamp(3)      default CURRENT_TIMESTAMP(3) not null comment '本条记录在node_info表的创建时间，而非本条记录在该表的创建时间',
     updated_at   timestamp(3)      default CURRENT_TIMESTAMP(3) not null on update CURRENT_TIMESTAMP(3) comment '最后更新时间，也即插入该表的时间',
     version      bigint unsigned   default '0'                  not null comment '本条记录版本。从0开始。'
 )
     comment '节点信息(历史)';
-
-create index node_active_index
-    on aigc.node_info_legacy (is_active)
-    comment '节点活跃索引';
 
 create index node_info_id_index
     on aigc.node_info_legacy (id);

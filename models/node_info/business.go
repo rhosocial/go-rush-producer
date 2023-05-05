@@ -33,8 +33,7 @@ func (m *NodeInfo) IsSocketEqual(target *NodeInfo) bool {
 func (m *NodeInfo) GetPeerActiveNodes() (*[]NodeInfo, error) {
 	var nodes []NodeInfo
 	var condition = map[string]interface{}{
-		"is_active": FieldIsActiveActive,
-		"level":     m.Level,
+		"level": m.Level,
 	}
 	tx := base.NodeInfoDB.Where(condition).Find(&nodes)
 	if tx.Error != nil {
@@ -52,10 +51,10 @@ func (m *NodeInfo) Socket() string {
 }
 
 func (m *NodeInfo) Log() string {
-	return fmt.Sprintf("[GO-RUSH] %10d [Version:%d] | %39s:%-5d | Superior: %10d | Level: %3d | Turn: %3d | Active: %d\n",
+	return fmt.Sprintf("[GO-RUSH] %10d [Version:%d] | %39s:%-5d | Superior: %10d | Level: %3d | Turn: %3d\n",
 		m.ID, m.Version.Int64,
 		m.Host, m.Port,
-		m.SuperiorID, m.Level, m.Turn, m.IsActive,
+		m.SuperiorID, m.Level, m.Turn,
 	)
 }
 
@@ -69,8 +68,7 @@ var ErrNodeDatabaseError = errors.New("node database error") // TODO: 具体错�
 func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 	var node NodeInfo
 	var condition = map[string]interface{}{
-		"is_active": FieldIsActiveActive,
-		"level":     m.Level - 1,
+		"level": m.Level - 1,
 	}
 	if specifySuperior {
 		condition["id"] = m.SuperiorID
@@ -110,9 +108,6 @@ func (m *NodeInfo) GetAllActiveSlaveNodes() (*[]NodeInfo, error) {
 	}
 	results := make([]NodeInfo, 0)
 	for _, n := range *nodes {
-		if n.IsActive != 0 {
-			continue
-		}
 		results = append(results, n)
 	}
 	return &results, nil
@@ -374,7 +369,6 @@ func (m *NodeInfo) ToRegisteredNodeInfo() *base.RegisteredNodeInfo {
 		Level:         m.Level,
 		SuperiorID:    m.SuperiorID,
 		Turn:          m.Turn,
-		IsActive:      m.IsActive,
 		Retry:         0,
 	}
 	return &registered

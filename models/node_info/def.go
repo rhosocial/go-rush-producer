@@ -9,12 +9,6 @@ import (
 	"gorm.io/plugin/optimisticlock"
 )
 
-const (
-	FieldIsActiveActive                  = 0
-	FieldIsActiveSuperiorDetectExited    = 1
-	FieldIsActiveSubordinateDetectExited = 2
-)
-
 type NodeInfo struct {
 	ID          uint64                 `gorm:"column:id;primaryKey;autoIncrement;<-:false" json:"id"`
 	Name        string                 `gorm:"column:name;default:''" json:"name"`
@@ -24,7 +18,6 @@ type NodeInfo struct {
 	Level       uint8                  `gorm:"column:level" json:"Level"`
 	SuperiorID  uint64                 `gorm:"column:superior_id" json:"superior_id"`
 	Turn        uint                   `gorm:"column:turn" json:"turn"`
-	IsActive    uint8                  `gorm:"column:is_active;default:0" json:"is_active"`
 	CreatedAt   time.Time              `gorm:"column:created_at;autoCreateTime:milli" json:"created_at"`
 	UpdatedAt   time.Time              `gorm:"column:updated_at;autoUpdateTime:milli" json:"updated_at"`
 	Version     optimisticlock.Version `gorm:"column:version;default:0" json:"version"`
@@ -47,7 +40,6 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 		Level:       m.Level,
 		SuperiorID:  m.SuperiorID,
 		Turn:        m.Turn,
-		IsActive:    m.IsActive,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
 		Version:     m.Version,
@@ -62,13 +54,6 @@ func (m *NodeInfo) AfterDelete(tx *gorm.DB) (err error) {
 func (m *NodeInfo) Subordinate() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("level = ?", m.Level+1).Where("superior_id = ?", m.ID)
-	}
-}
-
-// ActiveSubordinate 附加当前节点的活跃下级条件。
-func (m *NodeInfo) ActiveSubordinate() func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return m.Subordinate()(db).Where("is_active = ?", FieldIsActiveActive)
 	}
 }
 
