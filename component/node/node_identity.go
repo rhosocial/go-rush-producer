@@ -296,6 +296,7 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 // 2. 若自己是 Slave，则通知主节点自己停机。
 // 3. 若身份未定，不做任何动作。
 func (n *Pool) Stop(ctx context.Context, cause error) {
+	log.Println("stopping, due to", cause.Error())
 	if n.IsIdentityNotDetermined() {
 		return
 	}

@@ -367,7 +367,11 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 		return false, err
 	}
 	if resp != nil {
-		log.Println(resp.StatusCode, resp.Body)
+		var body = make([]byte, resp.ContentLength)
+		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
+			log.Println(err)
+		}
+		log.Println(resp.StatusCode, string(body))
 	}
 	return true, nil
 }
@@ -416,10 +420,15 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 	log.Printf("Notify slave[%d] to switch superior[%d]\n", slave.ID, candidate.ID)
 	resp, err := n.SendRequestSlaveNotifyMasterToSwitchSuperior(slave, candidate) // 不关心响应。
 	if err != nil {
+		log.Println(err)
 		return false, err
 	}
 	if resp != nil {
-		log.Println(resp.StatusCode, resp.Body)
+		var body = make([]byte, resp.ContentLength)
+		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
+			log.Println(err)
+		}
+		log.Println(resp.StatusCode, string(body))
 	}
 	return true, nil
 }

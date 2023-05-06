@@ -2,9 +2,10 @@ package node
 
 import (
 	"context"
-	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"log"
 	"time"
+
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 type WorkerSlaveIntervals struct {
