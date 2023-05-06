@@ -19,7 +19,7 @@ type PoolSlaves struct {
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
 
-	DetectInactiveCallback func(ctx context.Context, id uint64, retry uint8)
+	DetectInactiveCallback func(id uint64, retry uint8)
 }
 
 // ---- Turn ---- //
@@ -120,7 +120,7 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 // 注意 limitInactive 须比 limitRemoved 小，否则可能产生意想不到的后果。
 //
 // 返回被删除的节点ID数组指针。
-func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(ctx context.Context, limitInactive uint8, limitRemoved uint8) *[]uint64 {
+func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(limitInactive uint8, limitRemoved uint8) *[]uint64 {
 	if limitInactive >= limitRemoved {
 		log.Printf("Warning! the limit of inactive(%d) is greater than or equal to limit of removed(%d).\n", limitInactive, limitRemoved)
 	}
@@ -131,11 +131,11 @@ func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(ctx context.Context, limit
 		ps.NodesRetry[i] += 1
 		node := ps.Get(i)
 		if ps.NodesRetry[i] >= limitInactive && ps.NodesRetry[i] < limitRemoved && node != nil && ps.DetectInactiveCallback != nil {
-			go ps.DetectInactiveCallback(ctx, i, ps.NodesRetry[i])
+			go ps.DetectInactiveCallback(i, ps.NodesRetry[i])
 		}
 		if ps.NodesRetry[i] >= limitRemoved {
 			if node != nil {
-				_, err := node.RemoveSelf(ctx)
+				_, err := node.RemoveSelf()
 				if err != nil {
 					log.Println(err)
 				}

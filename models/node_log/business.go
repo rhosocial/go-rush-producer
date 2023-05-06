@@ -1,22 +1,21 @@
 package models
 
 import (
-	"context"
 	"time"
 
 	base "github.com/rhosocial/go-rush-producer/models"
 )
 
-func (m *NodeLog) Record(ctx context.Context) (int64, error) {
-	if tx := base.NodeInfoDB.WithContext(ctx).Create(m); tx.Error == nil {
+func (m *NodeLog) Record() (int64, error) {
+	if tx := base.NodeInfoDB.Create(m); tx.Error == nil {
 		return tx.RowsAffected, nil
 	} else {
 		return 0, tx.Error
 	}
 }
 
-func (m *NodeLog) VersionUp(ctx context.Context) (int64, error) {
-	if tx := base.NodeInfoDB.WithContext(ctx).Model(m).Update("updated_at", time.Now()); tx.Error == nil {
+func (m *NodeLog) VersionUp() (int64, error) {
+	if tx := base.NodeInfoDB.Model(m).Update("updated_at", time.Now()); tx.Error == nil {
 		return tx.RowsAffected, nil
 	} else {
 		return 0, tx.Error

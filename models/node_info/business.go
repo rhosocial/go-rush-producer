@@ -1,7 +1,6 @@
 package models
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -52,7 +51,7 @@ var ErrNodeDatabaseError = errors.New("node database error") // TODO: 具体错�
 // 如果为发现上级阶段，则不指定上级。如果为检查上级，则需要指定。
 // 如果已经是最高级，则报 ErrNodeLevelAlreadyHighest。
 // 如果查询数据库不存在上级节点，则报 ErrNodeSuperiorNotExist。其它数据库错误则报 ErrNodeDatabaseError。
-func (m *NodeInfo) GetSuperiorNode(ctx context.Context, specifySuperior bool) (*NodeInfo, error) {
+func (m *NodeInfo) GetSuperiorNode(specifySuperior bool) (*NodeInfo, error) {
 	var node NodeInfo
 	var condition = map[string]interface{}{
 		"level": m.Level - 1,
@@ -60,7 +59,7 @@ func (m *NodeInfo) GetSuperiorNode(ctx context.Context, specifySuperior bool) (*
 	if specifySuperior {
 		condition["id"] = m.SuperiorID
 	}
-	if tx := models.NodeInfoDB.WithContext(ctx).Where(condition).First(&node); tx.Error == gorm.ErrRecordNotFound {
+	if tx := models.NodeInfoDB.Where(condition).First(&node); tx.Error == gorm.ErrRecordNotFound {
 		return nil, ErrNodeSuperiorNotExist
 	} else if tx.Error != nil {
 		log.Println(tx.Error)
@@ -70,18 +69,18 @@ func (m *NodeInfo) GetSuperiorNode(ctx context.Context, specifySuperior bool) (*
 }
 
 // GetAllSlaveNodes 获取当前节点的所有从节点。
-func (m *NodeInfo) GetAllSlaveNodes(ctx context.Context) (*[]NodeInfo, error) {
+func (m *NodeInfo) GetAllSlaveNodes() (*[]NodeInfo, error) {
 	var slaveNodes []NodeInfo
-	if tx := models.NodeInfoDB.WithContext(ctx).Scopes(m.Subordinate()).Find(&slaveNodes); tx.Error != nil {
+	if tx := models.NodeInfoDB.Scopes(m.Subordinate()).Find(&slaveNodes); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &slaveNodes, nil
 }
 
 // GetNodeInfo 根据指定ID获取NodeInfo记录。若指定ID的记录不存在，则报 gorm.ErrRecordNotFound。
-func GetNodeInfo(ctx context.Context, id uint64) (*NodeInfo, error) {
+func GetNodeInfo(id uint64) (*NodeInfo, error) {
 	var record NodeInfo
-	if tx := models.NodeInfoDB.WithContext(ctx).Take(&record, id); tx.Error != nil {
+	if tx := models.NodeInfoDB.Take(&record, id); tx.Error != nil {
 		log.Println(tx.Error)
 		return nil, tx.Error
 	}
@@ -92,25 +91,25 @@ func GetNodeInfo(ctx context.Context, id uint64) (*NodeInfo, error) {
 // 从节点的上级节点为当前节点。
 // 从节点的 Level 为当前节点 + 1。
 // 从节点的 Turn 为当前所有节点最大 Turn + 1。如果没有从节点，则默认为 1。
-func (m *NodeInfo) AddSlaveNode(ctx context.Context, n *NodeInfo) (bool, error) {
+func (m *NodeInfo) AddSlaveNode(n *NodeInfo) (bool, error) {
 	n.SuperiorID = m.ID
 	n.Level = m.Level + 1
-	if tx := models.NodeInfoDB.WithContext(ctx).Create(n); tx.Error != nil {
+	if tx := models.NodeInfoDB.Create(n); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
 }
 
-func (m *NodeInfo) CommitSelfAsMasterNode(ctx context.Context) (bool, error) {
-	if tx := models.NodeInfoDB.WithContext(ctx).Create(m); tx.Error != nil {
+func (m *NodeInfo) CommitSelfAsMasterNode() (bool, error) {
+	if tx := models.NodeInfoDB.Create(m); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
 }
 
-func (m *NodeInfo) GetNodeBySocket(ctx context.Context) (*NodeInfo, error) {
+func (m *NodeInfo) GetNodeBySocket() (*NodeInfo, error) {
 	var node NodeInfo
-	if tx := models.NodeInfoDB.WithContext(ctx).Scopes(m.ScopeSocket()).Take(&node); tx.Error != nil {
+	if tx := models.NodeInfoDB.Scopes(m.ScopeSocket()).Take(&node); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &node, nil
@@ -140,8 +139,8 @@ func (m *NodeInfo) IsSubordinate(slave *NodeInfo) bool {
 // 3. 修改自己的记录：level -=1，m.SuperiorID = master.SuperiorID，m.Turn = master.Turn。
 //
 // 4. 修改其它节点的 SuperiorID 为自己。
-func (m *NodeInfo) SupersedeMasterNode(ctx context.Context, master *NodeInfo) error {
-	return models.NodeInfoDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (m *NodeInfo) SupersedeMasterNode(master *NodeInfo) error {
+	return models.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
 		// 1. 判断提供的 master 是否与数据库对应，以及是否为我的上级。
 		var realMaster NodeInfo
 		if err := tx.Scopes(master.ScopeSocket()).Where("level = ?", master.Level).Take(&realMaster, master.ID).Error; err != nil {
@@ -187,8 +186,8 @@ func (m *NodeInfo) SupersedeMasterNode(ctx context.Context, master *NodeInfo) er
 // 3. 修改 candidate 的记录：level -=1，candidate.SuperiorID = master.SuperiorID，candidate.Turn = master.Turn。
 //
 // 4. 修改其它节点的 SuperiorID 为自己。
-func (m *NodeInfo) HandoverMasterNode(ctx context.Context, candidate *NodeInfo) error {
-	return models.NodeInfoDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (m *NodeInfo) HandoverMasterNode(candidate *NodeInfo) error {
+	return models.NodeInfoDB.Transaction(func(tx *gorm.DB) error {
 		// 1. 判断提供的 candidate 是否与数据库对应，以及是否为我的下级。
 		var realSlave NodeInfo
 		if err := tx.Scopes(candidate.ScopeSocket()).Where("level = ?", candidate.Level).Take(&realSlave, candidate.ID).Error; err != nil {
@@ -246,19 +245,19 @@ func (m *NodeInfo) HandoverMasterNode(ctx context.Context, candidate *NodeInfo) 
 // TODO: 此为暂定名。
 var ErrModelInvalid = errors.New("slave not invalid")
 
-func (m *NodeInfo) RemoveSlaveNode(ctx context.Context, slave *NodeInfo) (bool, error) {
+func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 	if slave.Level != m.Level+1 || slave.SuperiorID != m.ID {
 		return false, ErrModelInvalid
 	}
-	if tx := models.NodeInfoDB.WithContext(ctx).Delete(&slave); tx.Error != nil {
+	if tx := models.NodeInfoDB.Delete(&slave); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
 }
 
 // RemoveSelf 删除自己。
-func (m *NodeInfo) RemoveSelf(ctx context.Context) (bool, error) {
-	if tx := models.NodeInfoDB.WithContext(ctx).Delete(m); tx.Error != nil {
+func (m *NodeInfo) RemoveSelf() (bool, error) {
+	if tx := models.NodeInfoDB.Delete(m); tx.Error != nil {
 		return false, tx.Error
 	}
 	return true, nil
@@ -266,48 +265,48 @@ func (m *NodeInfo) RemoveSelf(ctx context.Context) (bool, error) {
 
 // ---- Log ---- //
 
-func (m *NodeInfo) LogReportActive(ctx context.Context) (int64, error) {
-	log, err := m.GetLogActiveLatest(ctx)
+func (m *NodeInfo) LogReportActive() (int64, error) {
+	log, err := m.GetLogActiveLatest()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return m.NewNodeLog(NodeLog.NodeLogTypeReportActive, 0).Record(ctx)
+		return m.NewNodeLog(NodeLog.NodeLogTypeReportActive, 0).Record()
 	}
-	return log.VersionUp(ctx)
+	return log.VersionUp()
 }
 
-func (m *NodeInfo) LogReportExistedNodeMasterDetectedSlaveInactive(ctx context.Context, id uint64, retry uint8) (int64, error) {
-	return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive, id).Record(ctx)
+func (m *NodeInfo) LogReportExistedNodeMasterDetectedSlaveInactive(id uint64, retry uint8) (int64, error) {
+	return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive, id).Record()
 }
 
-func (m *NodeInfo) LogReportFreshSlaveJoined(ctx context.Context, fresh *NodeInfo) (int64, error) {
-	return m.NewNodeLog(NodeLog.NodeLogTypeFreshNodeSlaveJoined, fresh.ID).Record(ctx)
+func (m *NodeInfo) LogReportFreshSlaveJoined(fresh *NodeInfo) (int64, error) {
+	return m.NewNodeLog(NodeLog.NodeLogTypeFreshNodeSlaveJoined, fresh.ID).Record()
 }
 
-func (m *NodeInfo) LogReportExistedSlaveWithdrawn(ctx context.Context, existed *NodeInfo) (int64, error) {
-	return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeSlaveWithdrawn, existed.ID).Record(ctx)
+func (m *NodeInfo) LogReportExistedSlaveWithdrawn(existed *NodeInfo) (int64, error) {
+	return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeSlaveWithdrawn, existed.ID).Record()
 }
 
-func (m *NodeInfo) LogReportFreshMasterJoined(ctx context.Context) (int64, error) {
-	return m.NewNodeLog(NodeLog.NodeLogTypeFreshNodeMasterJoined, 0).Record(ctx)
+func (m *NodeInfo) LogReportFreshMasterJoined() (int64, error) {
+	return m.NewNodeLog(NodeLog.NodeLogTypeFreshNodeMasterJoined, 0).Record()
 }
 
-func (m *NodeInfo) LogReportExistedMasterWithdrawn(ctx context.Context) (int64, error) {
-	return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterWithdrawn, 0).Record(ctx)
+func (m *NodeInfo) LogReportExistedMasterWithdrawn() (int64, error) {
+	return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterWithdrawn, 0).Record()
 }
 
-func (m *NodeInfo) LogReportExistedNodeSlaveReportMasterInactive(ctx context.Context, master *NodeInfo) (int64, error) {
-	log, err := m.GetLogSlaveReportMasterInactive(ctx, master.ID)
+func (m *NodeInfo) LogReportExistedNodeSlaveReportMasterInactive(master *NodeInfo) (int64, error) {
+	log, err := m.GetLogSlaveReportMasterInactive(master.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID).Record(ctx)
+		return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID).Record()
 	}
-	return log.VersionUp(ctx)
+	return log.VersionUp()
 }
 
-func (m *NodeInfo) LogReportExistedNodeMasterReportSlaveInactive(ctx context.Context, slave *NodeInfo) (int64, error) {
-	log, err := m.GetLogMasterReportSlaveInactive(ctx, slave.ID)
+func (m *NodeInfo) LogReportExistedNodeMasterReportSlaveInactive(slave *NodeInfo) (int64, error) {
+	log, err := m.GetLogMasterReportSlaveInactive(slave.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID).Record(ctx)
+		return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID).Record()
 	}
-	return log.VersionUp(ctx)
+	return log.VersionUp()
 }
 
 func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *NodeLog.NodeLog {
@@ -349,32 +348,32 @@ func (m *NodeInfo) ToRegisteredNodeInfo() *models.RegisteredNodeInfo {
 	return &registered
 }
 
-func (m *NodeInfo) Refresh(ctx context.Context) error {
-	if err := models.NodeInfoDB.WithContext(ctx).Take(m, m.ID).Error; err != nil {
+func (m *NodeInfo) Refresh() error {
+	if err := models.NodeInfoDB.Take(m, m.ID).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *NodeInfo) GetLogActiveLatest(ctx context.Context) (*NodeLog.NodeLog, error) {
+func (m *NodeInfo) GetLogActiveLatest() (*NodeLog.NodeLog, error) {
 	var log NodeLog.NodeLog
-	if tx := models.NodeInfoDB.WithContext(ctx).Scopes(m.LogActiveLatest()).First(&log); tx.Error != nil {
+	if tx := models.NodeInfoDB.Scopes(m.LogActiveLatest()).First(&log); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &log, nil
 }
 
-func (m *NodeInfo) GetLogSlaveReportMasterInactive(ctx context.Context, targetID uint64) (*NodeLog.NodeLog, error) {
+func (m *NodeInfo) GetLogSlaveReportMasterInactive(targetID uint64) (*NodeLog.NodeLog, error) {
 	var log NodeLog.NodeLog
-	if tx := models.NodeInfoDB.WithContext(ctx).Scopes(m.LogSlaveReportMasterInactiveLatest(targetID)).First(&log); tx.Error != nil {
+	if tx := models.NodeInfoDB.Scopes(m.LogSlaveReportMasterInactiveLatest(targetID)).First(&log); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &log, nil
 }
 
-func (m *NodeInfo) GetLogMasterReportSlaveInactive(ctx context.Context, targetID uint64) (*NodeLog.NodeLog, error) {
+func (m *NodeInfo) GetLogMasterReportSlaveInactive(targetID uint64) (*NodeLog.NodeLog, error) {
 	var log NodeLog.NodeLog
-	if tx := models.NodeInfoDB.WithContext(ctx).Scopes(m.LogMasterReportSlaveInactiveLatest(targetID)).First(&log); tx.Error != nil {
+	if tx := models.NodeInfoDB.Scopes(m.LogMasterReportSlaveInactiveLatest(targetID)).First(&log); tx.Error != nil {
 		return nil, tx.Error
 	}
 	return &log, nil

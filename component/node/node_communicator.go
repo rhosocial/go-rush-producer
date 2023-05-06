@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -176,16 +175,16 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 
 // ------ GetStatus ------ //
 
-func (n *Pool) CheckNodeStatus(ctx context.Context, node *NodeInfo.NodeInfo) error {
+func (n *Pool) CheckNodeStatus(node *NodeInfo.NodeInfo) error {
 	resp, err := n.SendRequestStatus(node)
 	log.Println(node, err)
 	if resp != nil && resp.StatusCode == http.StatusOK {
 		// 请求正常，应当退出。
 		return ErrNodeExisted
 	}
-	inactive, err := n.Self.Node.LogReportExistedNodeMasterReportSlaveInactive(ctx, node)
+	inactive, err := n.Self.Node.LogReportExistedNodeMasterReportSlaveInactive(node)
 	log.Println(inactive, err)
-	self, err := node.RemoveSelf(ctx)
+	self, err := node.RemoveSelf()
 	log.Println(self, err)
 	return err
 }
@@ -303,7 +302,7 @@ type NotifyMasterToAddSelfAsSlaveResponseData struct {
 type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSelfAsSlaveResponseData, any]
 
 // NotifyMasterToAddSelfAsSlave 当前节点（从节点）通知主节点添加自己为其从节点。
-func (n *Pool) NotifyMasterToAddSelfAsSlave(ctx context.Context) (bool, error) {
+func (n *Pool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 	resp, err := n.SendRequestMasterToAddSelfAsSlave()
 	if err != nil {
 		return false, err
@@ -322,7 +321,7 @@ func (n *Pool) NotifyMasterToAddSelfAsSlave(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	// 校验成功，将返回的ID作为自己的ID。
-	self, err := NodeInfo.GetNodeInfo(ctx, respData.Data.ID)
+	self, err := NodeInfo.GetNodeInfo(respData.Data.ID)
 	n.Self.Node = self
 	return true, nil
 }

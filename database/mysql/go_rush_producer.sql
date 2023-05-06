@@ -1,4 +1,4 @@
-create table aigc.node_info
+create table `go-rush-producer`.node_info
 (
     id           bigint unsigned auto_increment comment '节点编号'
         primary key,
@@ -20,9 +20,9 @@ create table aigc.node_info
     comment '节点信息';
 
 create index node_info_id_index
-    on aigc.node_info (id);
+    on `go-rush-producer`.node_info (id);
 
-create table aigc.node_info_legacy
+create table `go-rush-producer`.node_info_legacy
 (
     id           bigint unsigned                                not null comment '（删除前最后一刻）节点编号'
         primary key,
@@ -40,17 +40,17 @@ create table aigc.node_info_legacy
     comment '节点信息(历史)';
 
 create index node_info_id_index
-    on aigc.node_info_legacy (id);
+    on `go-rush-producer`.node_info_legacy (id);
 
 create index node_level_superior_turn_index
-    on aigc.node_info_legacy (level, superior_id, turn)
+    on `go-rush-producer`.node_info_legacy (level, superior_id, turn)
     comment '节点接替顺序索引';
 
 create index node_socket_index
-    on aigc.node_info_legacy (host, port)
+    on `go-rush-producer`.node_info_legacy (host, port)
     comment '节点套接字索引';
 
-create table aigc.node_log
+create table `go-rush-producer`.node_log
 (
     id             bigint unsigned auto_increment comment '变更日志ID'
         primary key,
@@ -63,11 +63,11 @@ create table aigc.node_log
 );
 
 create index node_log_created_at_index
-    on aigc.node_log (created_at desc);
+    on `go-rush-producer`.node_log (created_at desc);
 
 create index node_log_relation_index
-    on aigc.node_log (node_id, type, target_node_id);
+    on `go-rush-producer`.node_log (node_id, type, target_node_id);
 
 create index node_log_type_index
-    on aigc.node_log (type);
+    on `go-rush-producer`.node_log (type);
 
