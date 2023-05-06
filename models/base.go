@@ -42,6 +42,9 @@ func (n *FreshNodeInfo) Log() string {
 }
 
 func (n *FreshNodeInfo) IsEqual(target *FreshNodeInfo) bool {
+	if n == nil && target == nil {
+		return true
+	}
 	if n != nil && target == nil || n == nil && target != nil {
 		return false
 	}

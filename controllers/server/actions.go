@@ -13,10 +13,10 @@ type ControllerServer struct {
 
 func (c *ControllerServer) RegisterActions(r *gin.Engine) {
 	// 服务器组
-	controller := r.Group("/server")
+	group := r.Group("/server")
 	{
 		// 主节点
-		controllerMaster := controller.Group("/master")
+		controllerMaster := group.Group("/master")
 		{
 			// 从节点获取从节点信息
 			controllerMaster.GET("", c.ActionSlaveGetMasterStatus)
@@ -32,7 +32,7 @@ func (c *ControllerServer) RegisterActions(r *gin.Engine) {
 			}
 		}
 		// 从节点
-		controllerSlave := controller.Group("/slave")
+		controllerSlave := group.Group("/slave")
 		{
 			// 主节点获取从节点信息
 			controllerSlave.GET("", c.ActionMasterGetSlaveStatus)
@@ -46,7 +46,7 @@ func (c *ControllerServer) RegisterActions(r *gin.Engine) {
 			}
 		}
 		// 服务器状态。用于未知节点获取当前节点信息。
-		controller.GET("", c.ActionStatus)
+		group.GET("", c.ActionStatus)
 	}
 }
 

@@ -266,11 +266,11 @@ func (m *NodeInfo) RemoveSelf() (bool, error) {
 // ---- Log ---- //
 
 func (m *NodeInfo) LogReportActive() (int64, error) {
-	log, err := m.GetLogActiveLatest()
+	nodeLog, err := m.GetLogActiveLatest()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return m.NewNodeLog(NodeLog.NodeLogTypeReportActive, 0).Record()
 	}
-	return log.VersionUp()
+	return nodeLog.VersionUp()
 }
 
 func (m *NodeInfo) LogReportExistedNodeMasterDetectedSlaveInactive(id uint64, retry uint8) (int64, error) {
@@ -294,28 +294,28 @@ func (m *NodeInfo) LogReportExistedMasterWithdrawn() (int64, error) {
 }
 
 func (m *NodeInfo) LogReportExistedNodeSlaveReportMasterInactive(master *NodeInfo) (int64, error) {
-	log, err := m.GetLogSlaveReportMasterInactive(master.ID)
+	nodeLog, err := m.GetLogSlaveReportMasterInactive(master.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeSlaveReportMasterInactive, master.ID).Record()
 	}
-	return log.VersionUp()
+	return nodeLog.VersionUp()
 }
 
 func (m *NodeInfo) LogReportExistedNodeMasterReportSlaveInactive(slave *NodeInfo) (int64, error) {
-	log, err := m.GetLogMasterReportSlaveInactive(slave.ID)
+	nodeLog, err := m.GetLogMasterReportSlaveInactive(slave.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return m.NewNodeLog(NodeLog.NodeLogTypeExistedNodeMasterReportSlaveInactive, slave.ID).Record()
 	}
-	return log.VersionUp()
+	return nodeLog.VersionUp()
 }
 
 func (m *NodeInfo) NewNodeLog(logType uint8, target uint64) *NodeLog.NodeLog {
-	log := NodeLog.NodeLog{
+	nodeLog := NodeLog.NodeLog{
 		NodeID:       m.ID,
 		Type:         logType,
 		TargetNodeID: target,
 	}
-	return &log
+	return &nodeLog
 }
 
 // ---- Log ---- //
@@ -356,25 +356,25 @@ func (m *NodeInfo) Refresh() error {
 }
 
 func (m *NodeInfo) GetLogActiveLatest() (*NodeLog.NodeLog, error) {
-	var log NodeLog.NodeLog
-	if tx := models.NodeInfoDB.Scopes(m.LogActiveLatest()).First(&log); tx.Error != nil {
+	var nodeLog NodeLog.NodeLog
+	if tx := models.NodeInfoDB.Scopes(m.LogActiveLatest()).First(&nodeLog); tx.Error != nil {
 		return nil, tx.Error
 	}
-	return &log, nil
+	return &nodeLog, nil
 }
 
 func (m *NodeInfo) GetLogSlaveReportMasterInactive(targetID uint64) (*NodeLog.NodeLog, error) {
-	var log NodeLog.NodeLog
-	if tx := models.NodeInfoDB.Scopes(m.LogSlaveReportMasterInactiveLatest(targetID)).First(&log); tx.Error != nil {
+	var nodeLog NodeLog.NodeLog
+	if tx := models.NodeInfoDB.Scopes(m.LogSlaveReportMasterInactiveLatest(targetID)).First(&nodeLog); tx.Error != nil {
 		return nil, tx.Error
 	}
-	return &log, nil
+	return &nodeLog, nil
 }
 
 func (m *NodeInfo) GetLogMasterReportSlaveInactive(targetID uint64) (*NodeLog.NodeLog, error) {
-	var log NodeLog.NodeLog
-	if tx := models.NodeInfoDB.Scopes(m.LogMasterReportSlaveInactiveLatest(targetID)).First(&log); tx.Error != nil {
+	var nodeLog NodeLog.NodeLog
+	if tx := models.NodeInfoDB.Scopes(m.LogMasterReportSlaveInactiveLatest(targetID)).First(&nodeLog); tx.Error != nil {
 		return nil, tx.Error
 	}
-	return &log, nil
+	return &nodeLog, nil
 }
