@@ -17,7 +17,7 @@ const (
 	IdentityAll           = IdentityMaster | IdentitySlave
 )
 
-var ErrNodeLevelAlreadyHighest = errors.New("I am already the highest level")
+var ErrNodeLevelAlreadyHighest = errors.New("it is already the highest level")
 
 func (n *Pool) SwitchIdentityMasterOn() {
 	n.Self.Identity = n.Self.Identity | IdentityMaster
@@ -61,14 +61,14 @@ func (n *Pool) DiscoverMasterNode(ctx context.Context, specifySuperior bool) (*N
 	if n.Self.Node.Level == 0 {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
-	if node, err := n.Self.Node.GetSuperiorNode(ctx, specifySuperior); err == nil {
+	node, err := n.Self.Node.GetSuperiorNode(ctx, specifySuperior)
+	if err == nil {
 		log.Print("Discovered master: ", node.Log())
 		err = n.CheckMaster(node)
 		return node, err
-	} else {
-		log.Println("Error(s) reported when discovering master record: ", err)
-		return nil, err
 	}
+	log.Println("Error(s) reported when discovering master record: ", err)
+	return nil, err
 }
 
 // startMaster 以"主节点"身份启动。
@@ -126,7 +126,9 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 	// n.Master.Node = nil
 	n.SwitchIdentityMasterOn()
 	if isMasterFresh {
-		n.Self.Node.LogReportFreshMasterJoined(ctx)
+		if _, err := n.Self.Node.LogReportFreshMasterJoined(ctx); err != nil {
+			log.Println(err)
+		}
 	}
 	n.StartMasterWorker(ctx)
 	return nil
@@ -191,11 +193,17 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 			log.Println(err)
 			return err
 		}
-		n.NotifyAllSlavesToSwitchSuperior(candidateID)
-		n.NotifySlaveToTakeoverSelf(candidateID)
+		if _, err := n.NotifyAllSlavesToSwitchSuperior(candidateID); err != nil {
+			log.Println(err)
+		}
+		if _, err := n.NotifySlaveToTakeoverSelf(candidateID); err != nil {
+			log.Println(err)
+		}
 	}
 	if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
-		n.Self.Node.LogReportExistedMasterWithdrawn(ctx)
+		if _, err := n.Self.Node.LogReportExistedMasterWithdrawn(ctx); err != nil {
+			log.Println(err)
+		}
 	}
 	return nil
 }
@@ -208,7 +216,9 @@ func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 	// 通知主节点自己停机。
 	if errors.Is(cause, ErrNodeTakeoverMaster) { // 什么也不做。
 	} else { // 其它原因停机需要通知主节点删除自己。忽略错误。
-		n.NotifyMasterToRemoveSelf()
+		if _, err := n.NotifyMasterToRemoveSelf(); err != nil {
+			log.Println(err)
+		}
 	}
 	return nil
 }
@@ -263,7 +273,9 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 			return err
 		} else if errors.Is(err, ErrNodeRequestResponseError) || errors.Is(err, ErrNodeMasterValidButRefused) {
 			// 请求响应失败，将自己作为主。将异常节点删除。
-			master.RemoveSelf(ctx)
+			if _, err := master.RemoveSelf(ctx); err != nil {
+				log.Println(err)
+			}
 			return n.startMaster(ctx, n.Self.Node, ErrNodeRequestResponseError)
 		} else if errors.Is(err, ErrNodeMasterExisted) {
 			// 主节点已存在，设置自己为从节点。
@@ -288,10 +300,16 @@ func (n *Pool) Stop(ctx context.Context, cause error) {
 		return
 	}
 	if n.IsIdentityMaster() {
-		n.stopMaster(ctx, cause)
+		err := n.stopMaster(ctx, cause)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 	if n.IsIdentitySlave() {
-		n.stopSlave(ctx, cause)
+		err := n.stopSlave(ctx, cause)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -369,11 +387,11 @@ func (n *Pool) Handover(ctx context.Context, candidate uint64) error {
 // SwitchSuperior 切换主节点。master 为新的主节点登记信息。
 func (n *Pool) SwitchSuperior(ctx context.Context, master *base.RegisteredNodeInfo) error {
 	// 更新 master 节点：
-	if node, err := NodeInfo.GetNodeInfo(ctx, master.ID); err != nil {
+	node, err := NodeInfo.GetNodeInfo(ctx, master.ID)
+	if err != nil {
 		return ErrNodeMasterInvalid
-	} else {
-		n.AcceptMaster(ctx, node)
 	}
+	n.AcceptMaster(ctx, node)
 	// 检查 master 节点。
 	if err := n.CheckMaster(n.Master.Node); err != nil {
 		return err

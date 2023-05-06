@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	NodeLogTypeReportActive                         = 0 // 节点报告自己活跃
-	NodeLogTypeFreshNodeMasterJoined                = 1 // 新主节点加入
-	NodeLogTypeExistedNodeMasterWithdrawn           = 2 // 旧主节点主动退出
-	NodeLogTypeFreshNodeSlaveJoined                 = 3 // 新从节点加入
-	NodeLogTypeExistedNodeSlaveWithdrawn            = 4 // 旧从节点主动退出
-	NodeLogTypeExistedNodeSlaveReportMasterInactive = 5 // 旧从节点报告主节点不活跃
-	NodeLogTypeExistedNodeMasterReportSlaveInactive = 6 // 旧主节点报告从节点不活跃
+	NodeLogTypeReportActive                         = 0 // The node reports itself as active
+	NodeLogTypeFreshNodeMasterJoined                = 1 // The fresh master node report joined
+	NodeLogTypeExistedNodeMasterWithdrawn           = 2 // The existed master node report withdrawn
+	NodeLogTypeFreshNodeSlaveJoined                 = 3 // The fresh slave node report joined
+	NodeLogTypeExistedNodeSlaveWithdrawn            = 4 // The existed slave node report withdrawn
+	NodeLogTypeExistedNodeSlaveReportMasterInactive = 5 // The existed slave report master as inactive
+	NodeLogTypeExistedNodeMasterReportSlaveInactive = 6 // The existed master report slave as inactive
 )
 
 type NodeLog struct {

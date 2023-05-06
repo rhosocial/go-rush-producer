@@ -39,7 +39,7 @@ func ExternalIP() (net.IP, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			ip := getIpFromAddr(addr)
+			ip := getIPFromAddr(addr)
 			if ip == nil {
 				continue
 			}
@@ -50,7 +50,7 @@ func ExternalIP() (net.IP, error) {
 }
 
 // 获取ip
-func getIpFromAddr(addr net.Addr) net.IP {
+func getIPFromAddr(addr net.Addr) net.IP {
 	var ip net.IP
 	switch v := addr.(type) {
 	case *net.IPNet:
@@ -112,12 +112,12 @@ var ErrNodeSlaveFreshNodeInfoInvalid = errors.New("invalid slave fresh node info
 
 func (n *Pool) CommitSelfAsMasterNode(ctx context.Context) bool {
 	n.Self.Upgrade()
-	if _, err := n.Self.Node.CommitSelfAsMasterNode(ctx); err == nil {
+	_, err := n.Self.Node.CommitSelfAsMasterNode(ctx)
+	if err == nil {
 		return true
-	} else {
-		log.Println(err)
-		return false
 	}
+	log.Println(err)
+	return false
 }
 
 // AcceptSlave 接受从节点。
@@ -156,14 +156,18 @@ func (n *Pool) AcceptSlave(ctx context.Context, node *models.FreshNodeInfo) (*No
 		return nil, err
 	}
 	n.Slaves.Nodes[slave.ID] = slave
-	n.Self.Node.LogReportFreshSlaveJoined(ctx, &slave)
+	if _, err := n.Self.Node.LogReportFreshSlaveJoined(ctx, &slave); err != nil {
+		log.Println(err)
+	}
 	return &slave, nil
 }
 
 // AcceptMaster 接受主节点。
 func (n *Pool) AcceptMaster(ctx context.Context, master *NodeInfo.NodeInfo) {
 	n.Master.Accept(master)
-	n.Self.Node.Refresh(ctx)
+	if err := n.Self.Node.Refresh(ctx); err != nil {
+		log.Println(err)
+	}
 	n.RefreshSlavesNodeInfo(ctx)
 }
 
@@ -184,7 +188,9 @@ func (n *Pool) RemoveSlave(ctx context.Context, id uint64, fresh *models.FreshNo
 		return false, err
 	}
 	delete(n.Slaves.Nodes, id)
-	n.Self.Node.LogReportExistedSlaveWithdrawn(ctx, slave)
+	if _, err := n.Self.Node.LogReportExistedSlaveWithdrawn(ctx, slave); err != nil {
+		log.Println(err)
+	}
 	return true, nil
 }
 
@@ -196,7 +202,9 @@ func (n *Pool) RefreshSlavesStatus(ctx context.Context) ([]uint64, []uint64) {
 	defer n.Slaves.NodesRWLock.Unlock()
 	for i, slave := range n.Slaves.Nodes {
 		if _, err := n.GetSlaveStatus(i); err != nil {
-			n.Self.Node.RemoveSlaveNode(ctx, &slave)
+			if _, err := n.Self.Node.RemoveSlaveNode(ctx, &slave); err != nil {
+				log.Println(err)
+			}
 			delete(n.Slaves.Nodes, i)
 			removed = append(removed, i)
 		} else {
@@ -274,7 +282,9 @@ func (n *Pool) StopSlaveWorker() {
 // ---- Callback ---- //
 
 func (n *Pool) DetectSlaveNodeInactiveCallback(ctx context.Context, id uint64, retry uint8) {
-	n.Self.Node.LogReportExistedNodeMasterDetectedSlaveInactive(ctx, id, retry)
+	if _, err := n.Self.Node.LogReportExistedNodeMasterDetectedSlaveInactive(ctx, id, retry); err != nil {
+		log.Println(err)
+	}
 }
 
 // ---- Callback ---- //

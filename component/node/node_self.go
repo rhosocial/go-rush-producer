@@ -90,7 +90,9 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		var body = make([]byte, resp.ContentLength)
-		resp.Body.Read(body)
+		if _, err := resp.Body.Read(body); err != nil {
+			return ErrNodeRequestResponseError
+		}
 		log.Println(string(body))
 		return ErrNodeMasterValidButRefused
 	}

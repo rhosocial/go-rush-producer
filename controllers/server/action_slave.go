@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/component/node"
-	base "github.com/rhosocial/go-rush-producer/models"
+	"github.com/rhosocial/go-rush-producer/models"
 )
 
 type ActionMasterGetSlaveStatusResponseData struct {
@@ -37,7 +37,7 @@ func (c *ControllerServer) ActionMasterNotifySlaveToTakeover(r *gin.Context) {
 		return
 	}
 	// 1.
-	var existed base.RegisteredNodeInfo
+	var existed models.RegisteredNodeInfo
 	if err := r.ShouldBindWith(&existed, binding.FormPost); err != nil {
 		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to bind post body", err.Error(), nil))
 		return
@@ -56,7 +56,7 @@ func (c *ControllerServer) ActionMasterNotifySlaveToSwitchSuperior(r *gin.Contex
 		r.JSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "not supported", nil, nil))
 		return
 	}
-	var superseded base.RegisteredNodeInfo
+	var superseded models.RegisteredNodeInfo
 	if err := r.ShouldBind(&superseded); err != nil {
 		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to bind post body", err.Error(), nil))
 		return

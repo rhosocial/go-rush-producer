@@ -210,7 +210,11 @@ func (n *Pool) SendRequestSlaveNotifyMasterToSwitchSuperior(node *NodeInfo.NodeI
 		return nil, ErrNodeMasterInvalid
 	}
 	var body = strings.NewReader(master.ToRegisteredNodeInfo().Encode())
-	req, err := n.PrepareNodeRequest(RequestMethodSlaveNotifySwitchSuperior, RequestURLFormatSlaveNotifySwitchSuperior, node.Socket(), body, "application/x-www-form-urlencoded")
+	req, err := n.PrepareNodeRequest(
+		RequestMethodSlaveNotifySwitchSuperior,
+		RequestURLFormatSlaveNotifySwitchSuperior,
+		node.Socket(), body, "application/x-www-form-urlencoded",
+	)
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
@@ -231,7 +235,11 @@ func (n *Pool) SendRequestSlaveNotifyMasterToTakeover(node *NodeInfo.NodeInfo) (
 		return nil, ErrNodeSlaveNodeInvalid
 	}
 	var body = strings.NewReader(n.Self.Node.ToRegisteredNodeInfo().Encode())
-	req, err := n.PrepareNodeRequest(RequestMethodSlaveNotifyTakeover, RequestURLFormatSlaveNotifyTakeover, node.Socket(), body, "application/x-www-form-urlencoded")
+	req, err := n.PrepareNodeRequest(
+		RequestMethodSlaveNotifyTakeover,
+		RequestURLFormatSlaveNotifyTakeover,
+		node.Socket(), body, "application/x-www-form-urlencoded",
+	)
 	if err != nil {
 		log.Println(err)
 		return nil, ErrNodeRequestResponseError
@@ -386,7 +394,12 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 		if i != candidateID {
 			// 这里不可以直接传递 v，因为这可能会导致访问到同一个map元素，而非按顺序遍历。
 			// go n.NotifySlaveToSwitchSuperior(&v, &candidate)
-			go n.NotifySlaveToSwitchSuperior(n.Slaves.Get(i), &candidate)
+			go func(slave *NodeInfo.NodeInfo, candidate *NodeInfo.NodeInfo) {
+				_, err := n.NotifySlaveToSwitchSuperior(slave, candidate)
+				if err != nil {
+					log.Println(err)
+				}
+			}(n.Slaves.Get(i), &candidate)
 		}
 	}
 	return true, nil
