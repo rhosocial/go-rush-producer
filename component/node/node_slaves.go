@@ -14,7 +14,7 @@ type PoolSlaves struct {
 	NodesRWLock sync.RWMutex
 	Nodes       map[uint64]NodeInfo.NodeInfo
 	NodesRetry  map[uint64]uint8
-	NextTurn    uint
+	NextTurn    uint32
 
 	WorkerCancelFunc       context.CancelCauseFunc
 	WorkerCancelFuncRWLock sync.RWMutex
@@ -32,7 +32,7 @@ func (ps *PoolSlaves) incTurn() {
 	ps.NextTurn += 1
 }
 
-func (ps *PoolSlaves) GetTurn() uint {
+func (ps *PoolSlaves) GetTurn() uint32 {
 	defer ps.incTurn()
 	return ps.NextTurn
 }
@@ -41,7 +41,7 @@ func (ps *PoolSlaves) GetTurn() uint {
 func (ps *PoolSlaves) GetTurnCandidate() uint64 {
 	ps.NodesRWLock.RLock()
 	defer ps.NodesRWLock.RUnlock()
-	turn := uint(math.MaxUint)
+	turn := uint32(math.MaxUint32)
 	target := uint64(0)
 	for i, v := range ps.Nodes {
 		if turn >= v.Turn {
@@ -117,7 +117,7 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 
 // RetryUpAllAndRemoveIfRetriedOut 重试次数调升，且在重试达到“不活跃上限”或“移除上限”后报告“不活跃”或“移除”。
 //
-// 注意 limitInacive 须比 limitRemoved 小，否则可能产生意想不到的后果。
+// 注意 limitInactive 须比 limitRemoved 小，否则可能产生意想不到的后果。
 //
 // 返回被删除的节点ID数组指针。
 func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(ctx context.Context, limitInactive uint8, limitRemoved uint8) *[]uint64 {
@@ -175,7 +175,7 @@ func (ps *PoolSlaves) AddSlaveNode(slave NodeInfo.NodeInfo) bool {
 // 刷新后会重新确定下一个顺序。
 func (ps *PoolSlaves) Refresh(nodes *[]NodeInfo.NodeInfo) {
 	result := make(map[uint64]NodeInfo.NodeInfo)
-	turnMax := uint(0)
+	turnMax := uint32(0)
 	for _, node := range *nodes {
 		if true { // TODO: 判断节点是否有效。
 			result[node.ID] = node

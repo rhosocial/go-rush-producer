@@ -297,7 +297,7 @@ type NotifyMasterToAddSelfAsSlaveResponseData struct {
 	NodeVersion string `json:"node_version"` // 新登记的从节点的版本。
 	Host        string `json:"host"`         // 新登记的从节点的域（IP地址）。
 	Port        uint16 `json:"port"`         // 新登记的从节点的端口。
-	Turn        uint   `json:"turn"`         // 新登记的从节点的接替顺序。
+	Turn        uint32 `json:"turn"`         // 新登记的从节点的接替顺序。
 }
 
 type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSelfAsSlaveResponseData, any]

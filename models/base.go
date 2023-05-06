@@ -24,7 +24,7 @@ type RegisteredNodeInfo struct {
 	ID         uint64 `form:"id" json:"id"`
 	Level      uint8  `form:"level" json:"level"`
 	SuperiorID uint64 `form:"superior_id" json:"superior_id"`
-	Turn       uint   `form:"turn" json:"turn"`
+	Turn       uint32 `form:"turn" json:"turn"`
 	Retry      uint8  `form:"retry" json:"retry"`
 }
 

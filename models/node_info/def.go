@@ -17,7 +17,7 @@ type NodeInfo struct {
 	Port        uint16                 `gorm:"column:port;<-:create" json:"Port"`
 	Level       uint8                  `gorm:"column:level" json:"Level"`
 	SuperiorID  uint64                 `gorm:"column:superior_id" json:"superior_id"`
-	Turn        uint                   `gorm:"column:turn" json:"turn"`
+	Turn        uint32                 `gorm:"column:turn" json:"turn"`
 	CreatedAt   time.Time              `gorm:"column:created_at;autoCreateTime:milli" json:"created_at"`
 	UpdatedAt   time.Time              `gorm:"column:updated_at;autoUpdateTime:milli" json:"updated_at"`
 	Version     optimisticlock.Version `gorm:"column:version;default:0" json:"version"`
