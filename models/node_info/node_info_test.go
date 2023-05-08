@@ -5,6 +5,8 @@ import (
 
 	mysqlConfig "github.com/rhosocial/go-rush-common/component/mysql"
 	"github.com/rhosocial/go-rush-producer/models"
+	NodeInfoLegacy "github.com/rhosocial/go-rush-producer/models/node_info_legacy"
+	NodeLog "github.com/rhosocial/go-rush-producer/models/node_log"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -235,5 +237,89 @@ func TestNodeInfo_IsSuperior(t *testing.T) {
 	})
 	t.Run("root is not the superior of subN", func(t *testing.T) {
 		assert.False(t, subN.IsSuperior(root))
+	})
+}
+
+func TestNodeInfo_RemoveSelf(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	tx := models.NodeInfoDB
+
+	t.Run("normal case", func(t *testing.T) {
+		var legacy NodeInfoLegacy.NodeInfoLegacy
+		assert.ErrorIs(t, tx.Model(&NodeInfoLegacy.NodeInfoLegacy{}).Where("id = ?", sub1.ID).Take(&legacy).Error, gorm.ErrRecordNotFound)
+
+		result, err := sub1.RemoveSelf()
+		assert.True(t, result)
+		assert.Nil(t, err)
+
+		tx.Model(&NodeInfoLegacy.NodeInfoLegacy{}).Where("id = ?", sub1.ID).Take(&legacy)
+		assert.Equal(t, sub1.ID, legacy.ID)
+	})
+}
+
+func TestNodeInfo_LogReportActive(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	tx := models.NodeInfoDB
+
+	t.Run("normal case", func(t *testing.T) {
+		var log NodeLog.NodeLog
+		assert.ErrorIs(t, tx.Model(&NodeLog.NodeLog{}).Where("node_id = ?", sub1.ID).Take(&log).Error, gorm.ErrRecordNotFound)
+
+		active, err := sub1.LogReportActive()
+		assert.Equal(t, int64(1), active)
+		assert.Nil(t, err)
+
+		tx.Model(&NodeLog.NodeLog{}).Where("node_id = ?", sub1.ID).Take(&log)
+		assert.Equal(t, int64(1), log.Version.Int64)
+
+		active, err = sub1.LogReportActive()
+		tx.Model(&NodeLog.NodeLog{}).Where("node_id = ?", sub1.ID).Take(&log)
+		assert.Equal(t, int64(2), log.Version.Int64)
+	})
+}
+
+func TestNodeInfo_RemoveSlaveNode(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	tx := models.NodeInfoDB
+
+	t.Run("normal case", func(t *testing.T) {
+		var legacy NodeInfoLegacy.NodeInfoLegacy
+		assert.ErrorIs(t, tx.Model(&NodeInfoLegacy.NodeInfoLegacy{}).Where("id = ?", sub1.ID).Take(&legacy).Error, gorm.ErrRecordNotFound)
+
+		result, err := root.RemoveSlaveNode(sub1)
+		assert.True(t, result)
+		assert.Nil(t, err)
+
+		tx.Model(&NodeInfoLegacy.NodeInfoLegacy{}).Where("id = ?", sub1.ID).Take(&legacy)
+		assert.Equal(t, sub1.ID, legacy.ID)
+	})
+}
+
+func TestNodeInfo_Refresh(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	tx := models.NodeInfoDB
+
+	t.Run("change the name of sub1", func(t *testing.T) {
+		newName := sub1.Name + sub1.NodeVersion
+		if err := tx.Model(&NodeInfo{}).Where("id = ?", sub1.ID).Update("name", newName).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+
+		assert.NotEqual(t, newName, sub1.Name)
+		sub1.Refresh()
+		assert.Equal(t, newName, sub1.Name)
 	})
 }
