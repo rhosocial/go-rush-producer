@@ -10,12 +10,13 @@ on:
     branches: [ "main" ]
 
 jobs:
-
-  build:
+  go20_redis7_mysql8:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build and start containers
+        run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -27,3 +28,6 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+      - name: Stop containers
+        if: always()
+        run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml down
