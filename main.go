@@ -74,7 +74,7 @@ func configCluster(identity int) {
 		log.Fatalln(err)
 	}
 	models.NodeInfoDB = db
-	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", *(*(*component.GlobalEnv).Net).ListenPort, 1)
+	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", "0.0.1", *(*(*component.GlobalEnv).Net).ListenPort, 1)
 	node.Nodes = node.NewNodePool(self)
 	node.Nodes.Start(context.Background(), identity)
 	// defer node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)

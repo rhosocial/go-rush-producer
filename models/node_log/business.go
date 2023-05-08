@@ -7,17 +7,17 @@ import (
 )
 
 func (m *NodeLog) Record() (int64, error) {
-	if tx := base.NodeInfoDB.Create(m); tx.Error == nil {
+	tx := base.NodeInfoDB.Create(m)
+	if tx.Error == nil {
 		return tx.RowsAffected, nil
-	} else {
-		return 0, tx.Error
 	}
+	return 0, tx.Error
 }
 
 func (m *NodeLog) VersionUp() (int64, error) {
-	if tx := base.NodeInfoDB.Model(m).Update("updated_at", time.Now()); tx.Error == nil {
+	tx := base.NodeInfoDB.Model(m).Update("updated_at", time.Now())
+	if tx.Error == nil {
 		return tx.RowsAffected, nil
-	} else {
-		return 0, tx.Error
 	}
+	return 0, tx.Error
 }

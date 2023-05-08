@@ -13,10 +13,10 @@ import (
 )
 
 // NewNodeInfo creates a new NodeInfo instance.
-func NewNodeInfo(name string, port uint16, level uint8) *NodeInfo {
+func NewNodeInfo(name string, nodeVersion string, port uint16, level uint8) *NodeInfo {
 	var node = NodeInfo{
 		Name:        name,
-		NodeVersion: "0.0.1",
+		NodeVersion: nodeVersion,
 		Port:        port,
 		Level:       level,
 	}
@@ -25,6 +25,15 @@ func NewNodeInfo(name string, port uint16, level uint8) *NodeInfo {
 
 // IsSocketEqual determine whether the sockets of two nodes are equal.
 func (m *NodeInfo) IsSocketEqual(target *NodeInfo) bool {
+	if m == nil || target == nil {
+		return false
+	}
+	ipM := net.ParseIP(m.Host)
+	ipT := net.ParseIP(target.Host)
+	// If it is a loopback address, the ports are considered the same if they are the same.
+	if ipM.IsLoopback() && ipT.IsLoopback() {
+		return m.Port == target.Port
+	}
 	return m.Host == target.Host && m.Port == target.Port
 }
 
