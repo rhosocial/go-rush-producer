@@ -3,11 +3,11 @@ package models
 import (
 	"time"
 
-	base "github.com/rhosocial/go-rush-producer/models"
+	"github.com/rhosocial/go-rush-producer/models"
 )
 
 func (m *NodeLog) Record() (int64, error) {
-	tx := base.NodeInfoDB.Create(m)
+	tx := models.NodeInfoDB.Create(m)
 	if tx.Error == nil {
 		return tx.RowsAffected, nil
 	}
@@ -15,7 +15,7 @@ func (m *NodeLog) Record() (int64, error) {
 }
 
 func (m *NodeLog) VersionUp() (int64, error) {
-	tx := base.NodeInfoDB.Model(m).Update("updated_at", time.Now())
+	tx := models.NodeInfoDB.Model(m).Update("updated_at", time.Now())
 	if tx.Error == nil {
 		return tx.RowsAffected, nil
 	}

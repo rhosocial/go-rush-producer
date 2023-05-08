@@ -12,6 +12,52 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestFreshNodeInfo_Encode(t *testing.T) {
+	t.Run("Empty content", func(t *testing.T) {
+		node := models.FreshNodeInfo{}
+		assert.Equal(t, "host=&name=&node_version=&port=0", node.Encode())
+	})
+	t.Run("Random content", func(t *testing.T) {
+		node := models.FreshNodeInfo{
+			Host:        "192.168.0.1",
+			Port:        uint16(38081),
+			NodeVersion: "1.0.0",
+			Name:        "GO-RUSH-PRODUCER",
+		}
+		assert.Equal(t, "host=192.168.0.1&name=GO-RUSH-PRODUCER&node_version=1.0.0&port=38081", node.Encode())
+	})
+}
+
+func TestFreshNodeInfo_IsEqual(t *testing.T) {
+	t.Run("nil origin and target", func(t *testing.T) {
+		var origin *models.FreshNodeInfo
+		var target *models.FreshNodeInfo
+		assert.True(t, origin.IsEqual(target))
+	})
+	t.Run("one is nil and the other is not", func(t *testing.T) {
+		origin := new(models.FreshNodeInfo)
+		var target *models.FreshNodeInfo
+		origin.Host = "192.168.0.1"
+		origin.Port = uint16(38081)
+		origin.Name = "GO-RUSH-PRODUCER"
+		origin.NodeVersion = "1.0.0"
+		assert.False(t, origin.IsEqual(target))
+	})
+	t.Run("origin is equal to target", func(t *testing.T) {
+		origin := new(models.FreshNodeInfo)
+		origin.Host = "192.168.0.1"
+		origin.Port = uint16(38081)
+		origin.Name = "GO-RUSH-PRODUCER"
+		origin.NodeVersion = "1.0.0"
+		target := new(models.FreshNodeInfo)
+		target.Host = "192.168.0.1"
+		target.Port = uint16(38081)
+		target.Name = "GO-RUSH-PRODUCER"
+		target.NodeVersion = "1.0.0"
+		assert.True(t, origin.IsEqual(target))
+	})
+}
+
 func TestNewNodeInfo(t *testing.T) {
 	t.Run("normal case", func(t *testing.T) {
 		node := NewNodeInfo("node_name_test_case", "1.0.0-test", 38081, 1)
@@ -113,8 +159,7 @@ func setupGorm(t *testing.T) {
 		t.Fatalf(err.Error())
 		return
 	}
-	models.NodeInfoDB = db
-	models.NodeInfoDB = models.NodeInfoDB.Begin()
+	models.NodeInfoDB = db.Begin()
 	//if err := models.NodeInfoDB.SavePoint("origin").Error; err != nil {
 	//	t.Fatalf(err.Error())
 	//	return
