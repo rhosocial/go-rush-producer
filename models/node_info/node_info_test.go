@@ -88,11 +88,9 @@ func TestNodeInfo_IsSocketEqual(t *testing.T) {
 	})
 }
 
-var tx *gorm.DB
-
 func teardownNodeInfo(t *testing.T) {
-	if tx != nil {
-		if err := tx.RollbackTo("origin").Error; err != nil {
+	if models.NodeInfoDB != nil {
+		if err := models.NodeInfoDB.Rollback().Error; err != nil {
 			t.Fatalf(err.Error())
 		}
 	}
@@ -111,39 +109,46 @@ func setupGorm(t *testing.T) {
 	db, err := gorm.Open(mysql.Open(config.GetDSN()), &gorm.Config{})
 	if err != nil {
 		t.Fatalf(err.Error())
+		return
 	}
 	models.NodeInfoDB = db
 	models.NodeInfoDB = models.NodeInfoDB.Begin()
-	if err := models.NodeInfoDB.SavePoint("origin").Error; err != nil {
-		t.Fatalf(err.Error())
-	}
+	//if err := models.NodeInfoDB.SavePoint("origin").Error; err != nil {
+	//	t.Fatalf(err.Error())
+	//	return
+	//}
 }
 
-func TestNodeInfo_GetAllSlaveNodes(t *testing.T) {
-	setupGorm(t)
-	defer teardownNodeInfo(t)
+var root *NodeInfo
+var sub1 *NodeInfo
+var sub2 *NodeInfo
+var subN *NodeInfo
+
+func prepareNodeInfo(t *testing.T) {
 	tx := models.NodeInfoDB
 
 	// root
-	root := NewNodeInfo("root", "1.0.0", 38081, 0)
+	root = NewNodeInfo("root", "1.0.0", 38081, 0)
 	root.Host = "127.0.0.1"
 	if err := tx.Create(&root).Error; err != nil {
 		t.Fatalf(err.Error())
+		return
 	}
 	assert.Greater(t, root.ID, uint64(0))
 
 	// sub1 is subordinate of root
-	sub1 := NewNodeInfo("sub1", "1.0.0", 38082, 1)
+	sub1 = NewNodeInfo("sub1", "1.0.0", 38082, 1)
 	sub1.Host = "127.0.0.1"
 	sub1.SuperiorID = root.ID
 	sub1.Turn = 1
 	if err := tx.Create(&sub1).Error; err != nil {
 		t.Fatalf(err.Error())
+		return
 	}
 	assert.Greater(t, sub1.ID, root.ID)
 
 	// sub2 is subordinate of root
-	sub2 := NewNodeInfo("sub2", "1.0.0", 38083, 1)
+	sub2 = NewNodeInfo("sub2", "1.0.0", 38083, 1)
 	sub2.Host = "127.0.0.1"
 	sub2.SuperiorID = root.ID
 	sub2.Turn = sub1.Turn + 1
@@ -153,23 +158,82 @@ func TestNodeInfo_GetAllSlaveNodes(t *testing.T) {
 	assert.Greater(t, sub2.ID, sub1.ID)
 
 	// subN is not subordinate of root
-	subN := NewNodeInfo("subN", "1.0.0", 38084, 1)
+	subN = NewNodeInfo("subN", "1.0.0", 38084, 1)
 	subN.Host = "127.0.0.1"
 	subN.SuperiorID = 0
 	subN.Turn = sub1.Turn + 1
 	if err := tx.Create(&subN).Error; err != nil {
 		t.Fatalf(err.Error())
+		return
 	}
 	assert.Greater(t, subN.ID, sub1.ID)
+}
+
+func TestNodeInfo_GetAllSlaveNodes(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
 
 	t.Run("normal case", func(t *testing.T) {
 		nodes, err := root.GetAllSlaveNodes()
 		if err != nil {
 			t.Fatalf(err.Error())
+			return
 		}
 		assert.NotNil(t, nodes)
 		assert.Len(t, *nodes, 2)
 		assert.Equal(t, "sub1", (*nodes)[0].Name)
 		assert.Equal(t, "sub2", (*nodes)[1].Name)
+	})
+}
+
+func TestNodeInfo_GetSuperiorNode(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	t.Run("root is the superior of sub1", func(t *testing.T) {
+		node, err := sub1.GetSuperiorNode(true)
+		if err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		assert.NotNil(t, node)
+		assert.Equal(t, root.Name, node.Name)
+		assert.Equal(t, root.ID, node.ID)
+		assert.Equal(t, root.ID, sub1.SuperiorID)
+	})
+	t.Run("root is not the superior of subN", func(t *testing.T) {
+		_, err := subN.GetSuperiorNode(true)
+		assert.ErrorIs(t, ErrNodeSuperiorNotExist, err)
+	})
+}
+
+func TestNodeInfo_IsSubordinate(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	t.Run("sub1 is the subordinate of root", func(t *testing.T) {
+		assert.True(t, root.IsSubordinate(sub1))
+	})
+	t.Run("sub2 is the subordinate of root", func(t *testing.T) {
+		assert.True(t, root.IsSubordinate(sub2))
+	})
+	t.Run("subN is not he subordinate of root", func(t *testing.T) {
+		assert.False(t, root.IsSubordinate(subN))
+	})
+}
+
+func TestNodeInfo_IsSuperior(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	t.Run("root is the superior of sub1", func(t *testing.T) {
+		assert.True(t, sub1.IsSuperior(root))
+	})
+	t.Run("root is not the superior of subN", func(t *testing.T) {
+		assert.False(t, subN.IsSuperior(root))
 	})
 }
