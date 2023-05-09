@@ -26,12 +26,17 @@ func (e *EnvNet) Validate() error {
 	return nil
 }
 
+const RunningModeDebug = 0
+const RunningModeRelease = 1
+
 type Env struct {
-	Net          *EnvNet                 `yaml:"Net,omitempty"`
-	MySQLServers *[]mysql.EnvMySQLServer `yaml:"MySQLServers,omitempty"`
-	Identity     int                     `yaml:"Identity,omitempty" default:"0"`
-	Localhost    bool                    `yaml:"Localhost,omitempty" default:"false"`
-	Master       *base.FreshNodeInfo     `yaml:"Master,omitempty"`
+	Net                     *EnvNet                 `yaml:"Net,omitempty"`
+	MySQLServers            *[]mysql.EnvMySQLServer `yaml:"MySQLServers,omitempty"`
+	Identity                int                     `yaml:"Identity,omitempty" default:"0"`
+	Localhost               bool                    `yaml:"Localhost,omitempty" default:"false"`
+	Master                  *base.FreshNodeInfo     `yaml:"Master,omitempty"`
+	RunningMode             uint8                   `yaml:"RunningMode,omitempty" default:"0"`
+	RunningModeVerboseLevel uint8                   `yaml:"RunningModeVerboseLevel,omitempty" default:"3"`
 }
 
 // GetNetDefault 取得 EnvNet 的默认值。
@@ -47,7 +52,10 @@ var GlobalEnv *Env
 // LoadEnvDefault 加载配置参数默认值。
 func LoadEnvDefault() error {
 	if GlobalEnv == nil {
-		var env Env
+		var env = Env{
+			RunningMode:             RunningModeDebug,
+			RunningModeVerboseLevel: 3,
+		}
 		err := env.Validate()
 		if err != nil {
 			return err

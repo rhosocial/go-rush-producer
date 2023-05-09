@@ -54,6 +54,11 @@ func main() {
 		return
 	}
 	configCluster((*component.GlobalEnv).Identity)
+	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+		gin.SetMode(gin.DebugMode)
+	} else if (*component.GlobalEnv).RunningMode == component.RunningModeRelease {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r = gin.New()
 	if !configEngine(r) {
 		return
