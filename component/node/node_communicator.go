@@ -305,19 +305,24 @@ type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSe
 func (n *Pool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 	resp, err := n.SendRequestMasterToAddSelfAsSlave()
 	if err != nil {
+		log.Println("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	var body = make([]byte, resp.ContentLength)
 	_, err = resp.Body.Read(body)
 	if err != io.EOF && err != nil {
+		log.Println("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return false, errors.New(string(body))
+		err = errors.New(string(body))
+		log.Println("[Send Request]Notify master to add self as slave:", err)
+		return false, err
 	}
 	respData := NotifyMasterToAddSelfAsSlaveResponse{}
 	err = json.Unmarshal(body, &respData)
 	if err != nil {
+		log.Println("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	// 校验成功，将返回的ID作为自己的ID。
@@ -363,12 +368,13 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	// 需要确保此时已删除当前节点信息，同时更新好目标接替节点信息和其他节点信息。
 	resp, err := n.SendRequestSlaveNotifyMasterToTakeover(&candidate)
 	if err != nil {
+		log.Println("[Send Request]Master notify slave to takeover:", err)
 		return false, err
 	}
 	if resp != nil {
 		var body = make([]byte, resp.ContentLength)
 		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
-			log.Println(err)
+			log.Println("[Send Request]Master notify slave to takeover:", err)
 		}
 		log.Println(resp.StatusCode, string(body))
 	}
@@ -419,13 +425,13 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 	log.Printf("Notify slave[%d] to switch superior[%d]\n", slave.ID, candidate.ID)
 	resp, err := n.SendRequestSlaveNotifyMasterToSwitchSuperior(slave, candidate) // 不关心响应。
 	if err != nil {
-		log.Println(err)
+		log.Println("[Send Request]Master notify slave to switch superior:", err)
 		return false, err
 	}
 	if resp != nil {
 		var body = make([]byte, resp.ContentLength)
 		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
-			log.Println(err)
+			log.Println("[Send Request]Master notify slave to switch superior:", err)
 		}
 		log.Println(resp.StatusCode, string(body))
 	}

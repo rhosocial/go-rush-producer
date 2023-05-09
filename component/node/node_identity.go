@@ -182,7 +182,9 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
 	// 通知从节点接替以及其它从节点切换主节点
 	candidateID := n.Slaves.GetTurnCandidate()
-	if candidateID == 0 { // 没有候选接替节点，删除自己。
+	if errors.Is(cause, ErrNodeMasterRecordIsNotValid) {
+		// 数据不一致直接停机，不通知交接和切换。
+	} else if candidateID == 0 { // 没有候选接替节点，删除自己。
 		_, err := n.Self.Node.RemoveSelf()
 		if err != nil {
 			log.Println("Failed to stop self:", err)
@@ -223,10 +225,13 @@ func (n *Pool) stopSlave(ctx context.Context, cause error) error {
 
 // Start 启动工作流程。
 //
+// ctx 启动当前动作的上下文。建议调用该方法的 ctx 为调用上下文的子上下文。
+//
+// identity 身份。1-只接受主节点，2-只接受从节点，3-先尝试主，已经有主时作为其从。其它数字不起作用。
+//
 // 注意，调用此方法前，需自行保证：
 // 1. 端口能够成功绑定，否则会产生不可预知的后果。
 // 2. n.Self 已准备好。
-// 3. 若指定为从节点模式，则 n.Master 也应当准备好。
 func (n *Pool) Start(ctx context.Context, identity int) error {
 	master, err := n.DiscoverMasterNode(false)
 	if identity == IdentityMaster { // 指定为 Master。
@@ -289,6 +294,10 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 }
 
 // Stop 退出流程。
+//
+// ctx 启动时的上下文。
+//
+// cause 停止原因。
 //
 // 1. 若自己是 Master，则通知所有从节点停机或选择一个从节点并通知其接替自己。
 // 2. 若自己是 Slave，则通知主节点自己停机。

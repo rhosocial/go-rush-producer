@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -71,7 +72,7 @@ type WorkerMasterIntervals struct {
 }
 
 // worker 以"主节点"身份执行。
-func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals, nodes *Pool, process func(nodes *Pool)) {
+func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals, nodes *Pool, process func(ctx context.Context, nodes *Pool)) {
 	for {
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
@@ -79,10 +80,13 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 			log.Println("Worker Master stopped, due to", context.Cause(ctx))
 			return
 		default:
-			process(nodes)
+			process(ctx, nodes)
 		}
 	}
 }
+
+var intervalCheckSelf = 0
+var ErrNodeMasterRecordIsNotValid = errors.New("the record of master is not valid")
 
 // workerMaster 主节点任务。
 //
@@ -90,8 +94,8 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 //
 // 2. 报告自己活跃。
 //
-// TODO: 3. 检查自己是否处于异常状况，即自己上次报告活跃是否远超阈值，同时刷新自己的数据表信息。
-func workerMaster(nodes *Pool) {
+// 3. 每十秒检查一次数据表自己的信息是否与自己相等。
+func workerMaster(ctx context.Context, nodes *Pool) {
 	log.Println("Worker Master is working...")
 	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(2, 3) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
 	if nodes.Self.AliveUpAndClearIf(10) == 9 {            // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
@@ -99,5 +103,13 @@ func workerMaster(nodes *Pool) {
 			log.Println(err)
 		}
 	}
-	// TODO: 3. 检查自己是否处于异常状况，即自己上次报告活跃是否远超阈值，同时刷新自己的数据表信息。
+	// 每十秒检查一次数据表自己的信息是否与自己相等。
+	intervalCheckSelf++
+	if intervalCheckSelf%10 == 0 {
+		intervalCheckSelf = 0
+		if !nodes.Self.CheckSelf() {
+			nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
+			ctx.Done()
+		}
+	}
 }

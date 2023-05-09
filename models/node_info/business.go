@@ -96,6 +96,27 @@ func GetNodeInfo(id uint64) (*NodeInfo, error) {
 	return &record, nil
 }
 
+var ErrNodeIsNotEqualBecauseOfNil = errors.New("at least one of the two is empty")
+var ErrNodeIsNotEqualBecauseOfDifferentID = errors.New("the two are not equal because of their different ID")
+var ErrNodeIsNotEqualBecauseOfSocket = errors.New("the two are not equal because of their different socket")
+var ErrNodeIsNotEqualBecauseOfLevelAndTurn = errors.New("the two are not equal because of their different level and turn")
+
+func (m *NodeInfo) IsEqual(target *NodeInfo) error {
+	if m == nil || target == nil {
+		return ErrNodeIsNotEqualBecauseOfNil
+	}
+	if m.ID != target.ID {
+		return ErrNodeIsNotEqualBecauseOfDifferentID
+	}
+	if !m.IsSocketEqual(target) {
+		return ErrNodeIsNotEqualBecauseOfSocket
+	}
+	if m.Level != target.Level || m.SuperiorID != target.SuperiorID || m.Turn != target.Turn {
+		return ErrNodeIsNotEqualBecauseOfLevelAndTurn
+	}
+	return nil
+}
+
 // AddSlaveNode 添加从节点信息到数据库。
 // 从节点的上级节点为当前节点。
 // 从节点的 Level 为当前节点 + 1。
@@ -265,10 +286,26 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 }
 
 // RemoveSelf 删除自己。
+//
+// 需要先判断数据库中是否存在，以避免重复删除问题。
 func (m *NodeInfo) RemoveSelf() (bool, error) {
-	if tx := models.NodeInfoDB.Delete(m); tx.Error != nil {
-		return false, tx.Error
+	tx := models.NodeInfoDB.Begin()
+	var node NodeInfo
+	tx.Model(m).Take(&node)
+	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+		tx.Rollback()
+		return true, nil
 	}
+	err := m.IsEqual(&node)
+	if err != nil {
+		tx.Rollback()
+		return false, err
+	}
+	if err := tx.Delete(m).Error; err != nil {
+		tx.Rollback()
+		return false, err
+	}
+	tx.Commit()
 	return true, nil
 }
 

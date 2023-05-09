@@ -76,11 +76,11 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) error {
 	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
 	resp, err := n.SendRequestMasterStatus(master)
 	if errors.Is(err, ErrNodeRequestInvalid) {
-		log.Println(err)
+		log.Println("[Send Request]Master Status:", err)
 		return ErrNodeRequestInvalid
 	}
 	if err != nil {
-		log.Println(err)
+		log.Println("[Send Request]Master Status:", err)
 		return ErrNodeRequestResponseError
 	}
 	// 此时目标主节点网络正常。
@@ -111,4 +111,19 @@ func (ps *PoolSelf) AliveUpAndClearIf(threshold uint8) uint8 {
 		ps.Alive = 0
 	}
 	return ps.Alive
+}
+
+// CheckSelf check that the current node is consistent with the contents of the database.
+func (ps *PoolSelf) CheckSelf() bool {
+	node, err := NodeInfo.GetNodeInfo(ps.Node.ID)
+	if err != nil {
+		return false
+	}
+	err = ps.Node.IsEqual(node)
+	if err == nil {
+		log.Println("Check self: valid")
+	} else {
+		log.Println("Check self:", err)
+	}
+	return err == nil
 }
