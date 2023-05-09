@@ -367,3 +367,99 @@ func TestNodeInfo_Refresh(t *testing.T) {
 		assert.Equal(t, newName, sub1.Name)
 	})
 }
+
+func TestNodeInfo_IsEqual(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	tx := models.NodeInfoDB
+
+	t.Run("equal", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, root.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		assert.Nil(t, root.IsEqual(&node))
+	})
+	t.Run("unequal: root & nil", func(t *testing.T) {
+		var node *NodeInfo
+		assert.ErrorIs(t, root.IsEqual(node), ErrNodeIsNotEqualBecauseOfNil)
+	})
+	t.Run("unequal: root & sub1", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, sub1.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		assert.ErrorIs(t, root.IsEqual(&node), ErrNodeIsNotEqualBecauseOfDifferentID)
+	})
+	t.Run("unequal: socket", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, subN.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		node.Port += 1
+		assert.ErrorIs(t, subN.IsEqual(&node), ErrNodeIsNotEqualBecauseOfSocket)
+	})
+	t.Run("unequal: level and turn", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, subN.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		node.Turn += 1
+		assert.ErrorIs(t, subN.IsEqual(&node), ErrNodeIsNotEqualBecauseOfLevelAndTurn)
+	})
+}
+
+func TestNodeInfo_IsEqualToRegistered(t *testing.T) {
+	setupGorm(t)
+	prepareNodeInfo(t)
+	defer teardownNodeInfo(t)
+
+	tx := models.NodeInfoDB
+
+	t.Run("equal", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, root.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		var registered = node.ToRegisteredNodeInfo()
+		assert.Nil(t, root.IsEqualToRegistered(registered))
+	})
+	t.Run("unequal: root & nil", func(t *testing.T) {
+		var registered *models.RegisteredNodeInfo
+		assert.ErrorIs(t, root.IsEqualToRegistered(registered), ErrNodeIsNotEqualBecauseOfNil)
+	})
+	t.Run("unequal: root & sub1", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, sub1.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		var registered = node.ToRegisteredNodeInfo()
+		assert.ErrorIs(t, root.IsEqualToRegistered(registered), ErrNodeIsNotEqualBecauseOfDifferentID)
+	})
+	t.Run("unequal: socket", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, subN.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		node.Port += 1
+		assert.ErrorIs(t, subN.IsEqualToRegistered(node.ToRegisteredNodeInfo()), ErrNodeIsNotEqualBecauseOfSocket)
+	})
+	t.Run("unequal: level and turn", func(t *testing.T) {
+		var node NodeInfo
+		if err := tx.Model(&NodeInfo{}).Take(&node, subN.ID).Error; err != nil {
+			t.Fatalf(err.Error())
+			return
+		}
+		node.Turn += 1
+		assert.ErrorIs(t, subN.IsEqualToRegistered(node.ToRegisteredNodeInfo()), ErrNodeIsNotEqualBecauseOfLevelAndTurn)
+	})
+}
