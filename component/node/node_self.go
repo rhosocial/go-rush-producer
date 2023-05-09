@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/rhosocial/go-rush-producer/component"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
@@ -74,7 +75,9 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (error, *http.R
 		log.Println("Master not specified")
 		return ErrNodeMasterInvalid, nil
 	}
-	log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
+	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+		log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
+	}
 	resp, err := n.SendRequestMasterStatus(master)
 	if errors.Is(err, ErrNodeRequestInvalid) {
 		log.Println("[Send Request]Master Status:", err)
@@ -122,7 +125,9 @@ func (ps *PoolSelf) CheckSelf() bool {
 	}
 	err = ps.Node.IsEqual(node)
 	if err == nil {
-		log.Println("Check self: valid")
+		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+			log.Println("Check self: valid")
+		}
 	} else {
 		log.Println("Check self:", err)
 	}

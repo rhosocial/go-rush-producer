@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rhosocial/go-rush-common/component/response"
+	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
@@ -378,7 +379,9 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
 			log.Println("[Send Request]Master notify slave to takeover:", err)
 		}
-		log.Println(resp.StatusCode, string(body))
+		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+			log.Println(resp.StatusCode, string(body))
+		}
 	}
 	return true, nil
 }
@@ -435,7 +438,9 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
 			log.Println("[Send Request]Master notify slave to switch superior:", err)
 		}
-		log.Println(resp.StatusCode, string(body))
+		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+			log.Println(resp.StatusCode, string(body))
+		}
 	}
 	return true, nil
 }

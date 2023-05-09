@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/rhosocial/go-rush-producer/component"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
@@ -17,7 +18,9 @@ type WorkerSlaveIntervals struct {
 
 // worker 以"从节点"身份执行。
 func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool, process func(ctx context.Context, nodes *Pool)) {
-	log.Println("Worker Slave is working...")
+	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+		log.Println("Worker Slave is working...")
+	}
 	if nodes.Self.Node == nil {
 		return
 	}
@@ -114,7 +117,9 @@ var ErrNodeMasterRecordIsNotValid = errors.New("the record of master is not vali
 //
 // 3. 每十秒检查一次数据表自己的信息是否与自己相等。
 func workerMaster(ctx context.Context, nodes *Pool) {
-	log.Println("Worker Master is working...")
+	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+		log.Println("Worker Master is working...")
+	}
 	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(2, 3) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
 	if nodes.Self.AliveUpAndClearIf(10) == 9 {            // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
 		if _, err := nodes.Self.Node.LogReportActive(); err != nil {

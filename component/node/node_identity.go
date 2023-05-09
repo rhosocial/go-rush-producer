@@ -20,18 +20,22 @@ const (
 var ErrNodeLevelAlreadyHighest = errors.New("it is already the highest level")
 
 func (n *Pool) SwitchIdentityMasterOn() {
+	log.Println("Identity switched MASTER: ON")
 	n.Self.Identity = n.Self.Identity | IdentityMaster
 }
 
 func (n *Pool) SwitchIdentityMasterOff() {
+	log.Println("Identity switched MASTER: OFF")
 	n.Self.Identity = n.Self.Identity &^ IdentityMaster
 }
 
 func (n *Pool) SwitchIdentitySlaveOn() {
+	log.Println("Identity switched SLAVE: ON")
 	n.Self.Identity = n.Self.Identity | IdentitySlave
 }
 
 func (n *Pool) SwitchIdentitySlaveOff() {
+	log.Println("Identity switched SLAVE: OFF")
 	n.Self.Identity = n.Self.Identity &^ IdentitySlave
 }
 

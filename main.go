@@ -20,6 +20,7 @@ import (
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	loggerGorm "gorm.io/gorm/logger"
 )
 
 var r *gin.Engine
@@ -74,6 +75,10 @@ func configCluster(identity int) {
 		log.Fatalln("Cannot find MySQL connection.")
 		return
 	}
+	config := gorm.Config{}
+	if (*component.GlobalEnv).RunningMode == component.RunningModeRelease {
+		config.Logger = loggerGorm.Default.LogMode(loggerGorm.Error)
+	}
 	db, err := gorm.Open(mysql.Open((*(*component.GlobalEnv).MySQLServers)[0].GetDSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatalln(err)
@@ -90,12 +95,12 @@ func configCluster(identity int) {
 	}
 	if node.Nodes.Self.Identity == node.IdentityMaster {
 		// Start a goroutine to monitor its master.
-		log.Println("Identity: Master")
+		// log.Println("Identity: Master")
 		log.Printf("Self  : %s\n", node.Nodes.Self.Node.Log())
 	}
 	if node.Nodes.Self.Identity == node.IdentitySlave {
 		// Start a goroutine to monitor its slaves.
-		log.Println("Identity: Slave.")
+		// log.Println("Identity: Slave.")
 		log.Printf("Master: %s", node.Nodes.Master.Node.Log())
 		log.Printf("Self  : %s", node.Nodes.Self.Node.Log())
 	}
