@@ -1,6 +1,7 @@
 package controllerServer
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -31,10 +32,12 @@ func (c *ControllerServer) ActionSlaveGetMasterStatus(r *gin.Context) {
 	// log.Println(r.GetHeader(node.RequestHeaderXNodeIDKey), r.GetHeader(node.RequestHeaderXNodePortKey))
 	r.JSON(http.StatusOK, c.NewResponseGeneric(
 		r, 0, "success", node.RequestMasterStatusResponseData{
-			Host:       r.Request.Host,
-			ClientIP:   r.ClientIP(),
-			RemoteAddr: r.Request.RemoteAddr,
-			Attended:   attended,
+			Host:            r.Request.Host,
+			ClientIP:        r.ClientIP(),
+			RemoteAddr:      r.Request.RemoteAddr,
+			Attended:        attended,
+			IsMasterWorking: node.Nodes.Master.IsWorking(),
+			IsSlaveWorking:  node.Nodes.Slaves.IsWorking(),
 		}, node.RequestMasterStatusResponseExtension{
 			Master: node.Nodes.Master.Node.ToRegisteredNodeInfo(),
 			Slaves: node.Nodes.Slaves.GetRegisteredNodeInfos(),
@@ -145,6 +148,10 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 		NodeVersion: r.Query("node_version"),
 	}
 	if _, err := node.Nodes.RemoveSlave(slaveID, &fresh); err != nil {
+		if errors.Is(err, node.ErrNodeSlaveFreshNodeInfoInvalid) {
+			r.AbortWithStatusJSON(http.StatusForbidden, c.NewResponseGeneric(r, 1, "failed to remove slave", err.Error(), nil))
+			return
+		}
 		r.Error(err)
 		r.AbortWithStatusJSON(http.StatusInternalServerError, c.NewResponseGeneric(r, 1, "failed to remove slave", err.Error(), nil))
 		return

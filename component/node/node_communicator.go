@@ -63,17 +63,19 @@ func (n *Pool) SendRequestMasterStatus(master *NodeInfo.NodeInfo) (*http.Respons
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
 
 // RequestMasterStatusResponseData 从节点请求主节点状态响应体的数据部分。
 type RequestMasterStatusResponseData struct {
-	Host       string `json:"host,omitempty"`        // 主节点自己的套接字。
-	ClientIP   string `json:"client_ip,omitempty"`   // 请求从节点的客户端IP地址。
-	RemoteAddr string `json:"remote_addr,omitempty"` // 请求从节点的远程地址（套接字）。
-	Attended   bool   `json:"attended"`              // 请求从节点是否已加入。
+	Host            string `json:"host,omitempty"`        // 主节点自己的套接字。
+	ClientIP        string `json:"client_ip,omitempty"`   // 请求从节点的客户端IP地址。
+	RemoteAddr      string `json:"remote_addr,omitempty"` // 请求从节点的远程地址（套接字）。
+	Attended        bool   `json:"attended"`              // 请求从节点是否已加入。
+	IsMasterWorking bool   `json:"is_master_working"`     // 当前节点主节点身份是否正在工作
+	IsSlaveWorking  bool   `json:"is_slave_working"`      // 当前节点从节点身份是否正在工作
 }
 
 // RequestMasterStatusResponseExtension 从节点请求主节点状态响应体的扩展部分。
@@ -106,7 +108,7 @@ func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -136,7 +138,7 @@ func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 		return nil, ErrNodeRequestInvalid
 	}
 	req.Header.Add(RequestHeaderXAuthorizationTokenKey, RequestHeaderXAuthorizationTokenValue)
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }

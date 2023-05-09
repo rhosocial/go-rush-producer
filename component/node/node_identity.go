@@ -64,7 +64,7 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, err
 	node, err := n.Self.Node.GetSuperiorNode(specifySuperior)
 	if err == nil {
 		log.Print("Discovered master: ", node.Log())
-		err = n.CheckMaster(node)
+		err, _ = n.CheckMaster(node)
 		return node, err
 	}
 	log.Println("Error(s) reported when discovering master record: ", err)
@@ -184,6 +184,7 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	candidateID := n.Slaves.GetTurnCandidate()
 	if errors.Is(cause, ErrNodeMasterRecordIsNotValid) {
 		// 数据不一致直接停机，不通知交接和切换。
+		// n.Master.Clear()
 	} else if candidateID == 0 { // 没有候选接替节点，删除自己。
 		_, err := n.Self.Node.RemoveSelf()
 		if err != nil {
@@ -400,7 +401,7 @@ func (n *Pool) SwitchSuperior(master *base.RegisteredNodeInfo) error {
 	}
 	n.AcceptMaster(node)
 	// 检查 master 节点。
-	if err := n.CheckMaster(n.Master.Node); err != nil {
+	if err, _ := n.CheckMaster(n.Master.Node); err != nil {
 		return err
 	}
 	return nil

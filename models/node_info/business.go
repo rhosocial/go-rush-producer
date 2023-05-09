@@ -37,6 +37,19 @@ func (m *NodeInfo) IsSocketEqual(target *NodeInfo) bool {
 	return m.Host == target.Host && m.Port == target.Port
 }
 
+func (m *NodeInfo) IsSocketEqualToRegistered(target *models.RegisteredNodeInfo) bool {
+	if m == nil || target == nil {
+		return false
+	}
+	ipM := net.ParseIP(m.Host)
+	ipT := net.ParseIP(target.Host)
+	// If it is a loopback address, the ports are considered the same if they are the same.
+	if ipM.IsLoopback() && ipT.IsLoopback() {
+		return m.Port == target.Port
+	}
+	return m.Host == target.Host && m.Port == target.Port
+}
+
 func (m *NodeInfo) Socket() string {
 	ip := net.ParseIP(m.Host)
 	if ip != nil && strings.Contains(m.Host, ":") { // IPv6
@@ -109,6 +122,22 @@ func (m *NodeInfo) IsEqual(target *NodeInfo) error {
 		return ErrNodeIsNotEqualBecauseOfDifferentID
 	}
 	if !m.IsSocketEqual(target) {
+		return ErrNodeIsNotEqualBecauseOfSocket
+	}
+	if m.Level != target.Level || m.SuperiorID != target.SuperiorID || m.Turn != target.Turn {
+		return ErrNodeIsNotEqualBecauseOfLevelAndTurn
+	}
+	return nil
+}
+
+func (m *NodeInfo) IsEqualToRegistered(target *models.RegisteredNodeInfo) error {
+	if m == nil || target == nil {
+		return ErrNodeIsNotEqualBecauseOfNil
+	}
+	if m.ID != target.ID {
+		return ErrNodeIsNotEqualBecauseOfDifferentID
+	}
+	if !m.IsSocketEqualToRegistered(target) {
 		return ErrNodeIsNotEqualBecauseOfSocket
 	}
 	if m.Level != target.Level || m.SuperiorID != target.SuperiorID || m.Turn != target.Turn {

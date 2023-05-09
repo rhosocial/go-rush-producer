@@ -2,7 +2,9 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"time"
 
@@ -14,7 +16,7 @@ type WorkerSlaveIntervals struct {
 }
 
 // worker 以"从节点"身份执行。
-func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool, process func(nodes *Pool)) {
+func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool, process func(ctx context.Context, nodes *Pool)) {
 	log.Println("Worker Slave is working...")
 	if nodes.Self.Node == nil {
 		return
@@ -29,18 +31,32 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 			log.Println("Worker Slave stopped, due to", context.Cause(ctx))
 			return
 		default:
-			process(nodes)
+			process(ctx, nodes)
 		}
 	}
 }
 
-func workerSlaveCheckMaster(nodes *Pool) {
-	err := nodes.CheckMaster(nodes.Master.Node)
+func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) {
+	err, resp := nodes.CheckMaster(nodes.Master.Node)
 	if err == nil {
 		nodes.Master.RetryClear()
 	} else {
 		nodes.Master.RetryUp()
 		log.Println(err, nodes.Master.Retry)
+	}
+	// 检查自己是否存在。
+	var respContent RequestMasterStatusResponse
+	var body = make([]byte, resp.ContentLength)
+	if _, err := resp.Body.Read(body); err != nil && err != io.EOF {
+		log.Println(ErrNodeRequestResponseError)
+	}
+	err = json.Unmarshal(body, &respContent)
+	if err != nil {
+		log.Println("Worker Slave:", err)
+	}
+	if !respContent.Data.Attended {
+		// 如果发现自己不存在，则直接停机。
+		nodes.Stop(ctx, ErrNodeSlaveNodeInvalid)
 	}
 	// TODO: <参数点> 从节点检查主节点最大重试次数。
 	if nodes.Master.Retry >= 3 {
@@ -109,7 +125,6 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 		intervalCheckSelf = 0
 		if !nodes.Self.CheckSelf() {
 			nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
-			ctx.Done()
 		}
 	}
 }

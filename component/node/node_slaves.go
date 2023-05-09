@@ -194,9 +194,7 @@ func (ps *PoolSlaves) Refresh(nodes *[]NodeInfo.NodeInfo) {
 
 // Check 检查从节点是否有效。检查通过则返回节点信息 models.NodeInfo。
 //
-// 1. 若节点不存在，则报 ErrNodeMasterDoesNotHaveSpecifiedSlave。
-//
-// 2. 检查 models.FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
+// 检查 models.FreshNodeInfo 是否与本节点维护一致。若不一致，则报 ErrNodeSlaveFreshNodeInfoInvalid。
 func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*NodeInfo.NodeInfo, error) {
 	// 检查指定ID是否存在，如果不是，则报错。
 	// slave, exist := n.Slaves[id]
