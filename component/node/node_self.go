@@ -46,13 +46,13 @@ var ErrNodeExisted = errors.New(" a valid node with same socket already exists")
 // 1. 如果相同，则认为是自己，报 ErrNodeMasterIsSelf。
 //
 // 2. 如果不同，则认为主节点是另一个进程。尝试与其沟通，参见 CheckMasterWithRequest。
-func (n *Pool) CheckMaster(master *NodeInfo.NodeInfo) (error, *http.Response) {
+func (n *Pool) CheckMaster(master *NodeInfo.NodeInfo) (*http.Response, error) {
 	if master == nil {
 		log.Println("Master not specified")
-		return ErrNodeMasterInvalid, nil
+		return nil, ErrNodeMasterInvalid
 	}
 	if n.Self.Node.IsSocketEqual(master) {
-		return ErrNodeMasterIsSelf, nil
+		return nil, ErrNodeMasterIsSelf
 	}
 	return n.CheckMasterWithRequest(master)
 }
@@ -70,10 +70,10 @@ func (n *Pool) CheckMaster(master *NodeInfo.NodeInfo) (error, *http.Response) {
 // 4. 如果状态码不是 200 OK，则认为主节点有效，但拒绝。
 //
 // 其它情况没有任何错误。
-func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (error, *http.Response) {
+func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (*http.Response, error) {
 	if master == nil {
 		log.Println("Master not specified")
-		return ErrNodeMasterInvalid, nil
+		return nil, ErrNodeMasterInvalid
 	}
 	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
 		log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
@@ -81,26 +81,26 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (error, *http.R
 	resp, err := n.SendRequestMasterStatus(master)
 	if errors.Is(err, ErrNodeRequestInvalid) {
 		log.Println("[Send Request]Master Status:", err)
-		return ErrNodeRequestInvalid, resp
+		return resp, ErrNodeRequestInvalid
 	}
 	if err != nil {
 		log.Println("[Send Request]Master Status:", err)
-		return ErrNodeRequestResponseError, resp
+		return resp, ErrNodeRequestResponseError
 	}
 	// 此时目标主节点网络正常。
 	// 若与自己套接字相同，则视为已存在。
 	if n.Self.Node.IsSocketEqual(master) {
-		return ErrNodeMasterExisted, resp
+		return resp, ErrNodeMasterExisted
 	}
 	if resp.StatusCode != http.StatusOK {
 		var body = make([]byte, resp.ContentLength)
 		if _, err := resp.Body.Read(body); err != nil && err != io.EOF {
-			return ErrNodeRequestResponseError, resp
+			return resp, ErrNodeRequestResponseError
 		}
 		log.Println(string(body))
-		return ErrNodeMasterValidButRefused, resp
+		return resp, ErrNodeMasterValidButRefused
 	}
-	return nil, resp
+	return resp, nil
 }
 
 // AliveUpAndClearIf 活跃次数调升，并在达到阈值时清零。也即调用后返回值不会大于 threshold。

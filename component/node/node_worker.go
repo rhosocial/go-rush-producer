@@ -40,7 +40,7 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 }
 
 func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) {
-	err, resp := nodes.CheckMaster(nodes.Master.Node)
+	resp, err := nodes.CheckMaster(nodes.Master.Node)
 	if err == nil {
 		nodes.Master.RetryClear()
 	} else {

@@ -69,7 +69,7 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, err
 	node, err := n.Self.Node.GetSuperiorNode(specifySuperior)
 	if err == nil {
 		log.Print("Discovered master: ", node.Log())
-		err, _ = n.CheckMaster(node)
+		_, err = n.CheckMaster(node)
 		return node, err
 	}
 	log.Println("Error(s) reported when discovering master record: ", err)
@@ -412,7 +412,7 @@ func (n *Pool) SwitchSuperior(master *base.RegisteredNodeInfo) error {
 	}
 	n.AcceptMaster(node)
 	// 检查 master 节点。
-	if err, _ := n.CheckMaster(n.Master.Node); err != nil {
+	if _, err := n.CheckMaster(n.Master.Node); err != nil {
 		return err
 	}
 	return nil
