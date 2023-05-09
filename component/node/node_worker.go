@@ -133,7 +133,10 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 	if intervalCheckSelf%10 == 0 {
 		intervalCheckSelf = 0
 		if !nodes.Self.CheckSelf() {
-			nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
+			err := nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }
