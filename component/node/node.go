@@ -239,13 +239,13 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 	}, n, workerMaster)
 }
 
-var ErrNodeWorkerStopped = errors.New("worker stopped")
+var ErrNodeSystemSignalStopped = errors.New("received a system signal to stop")
 
 // StopMasterWorker 停止主节点身份工作协程。
-func (n *Pool) StopMasterWorker() {
+func (n *Pool) StopMasterWorker(cause error) {
 	n.Master.WorkerCancelFuncRWLock.Lock()
 	defer n.Master.WorkerCancelFuncRWLock.Unlock()
-	n.Master.WorkerCancelFunc(ErrNodeWorkerStopped)
+	n.Master.WorkerCancelFunc(cause)
 	n.Master.WorkerCancelFunc = nil
 }
 
@@ -270,10 +270,10 @@ func (n *Pool) StartSlaveWorker(ctx context.Context) {
 }
 
 // StopSlaveWorker 停止从节点身份工作协程。
-func (n *Pool) StopSlaveWorker() {
+func (n *Pool) StopSlaveWorker(cause error) {
 	n.Slaves.WorkerCancelFuncRWLock.Lock()
 	defer n.Slaves.WorkerCancelFuncRWLock.Unlock()
-	n.Slaves.WorkerCancelFunc(ErrNodeWorkerStopped)
+	n.Slaves.WorkerCancelFunc(cause)
 	n.Slaves.WorkerCancelFunc = nil
 }
 

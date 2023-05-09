@@ -119,7 +119,7 @@ func SetupCloseHandler() {
 		<-c
 		log.Println("\r- Ctrl+C pressed in Terminal")
 		if (*component.GlobalEnv).Identity > 0 {
-			node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
+			node.Nodes.Stop(context.Background(), node.ErrNodeSystemSignalStopped)
 		}
 		os.Exit(0)
 	}()

@@ -160,10 +160,6 @@ func setupGorm(t *testing.T) {
 		return
 	}
 	models.NodeInfoDB = db.Begin()
-	//if err := models.NodeInfoDB.SavePoint("origin").Error; err != nil {
-	//	t.Fatalf(err.Error())
-	//	return
-	//}
 }
 
 var root *NodeInfo

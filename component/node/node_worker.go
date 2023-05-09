@@ -25,7 +25,7 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
 		case <-ctx.Done():
-			log.Println(context.Cause(ctx))
+			log.Println("Worker Slave stopped, due to", context.Cause(ctx))
 			return
 		default:
 			process(nodes)
@@ -76,7 +76,7 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
 		case <-ctx.Done():
-			log.Println(context.Cause(ctx))
+			log.Println("Worker Master stopped, due to", context.Cause(ctx))
 			return
 		default:
 			process(nodes)

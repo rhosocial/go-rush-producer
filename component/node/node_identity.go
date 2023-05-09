@@ -176,11 +176,11 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 
 // stopMaster 停止主节点。
 func (n *Pool) stopMaster(ctx context.Context, cause error) error {
-	log.Println("stop master")
-	n.StopMasterWorker()
+	log.Println("Worker Master stopping, due to", cause)
+	n.StopMasterWorker(cause)
 	n.SwitchIdentityMasterOff()
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
-	// TODO: 通知从节点接替以及其它从节点切换主节点
+	// 通知从节点接替以及其它从节点切换主节点
 	candidateID := n.Slaves.GetTurnCandidate()
 	if candidateID == 0 { // 没有候选接替节点，删除自己。
 		_, err := n.Self.Node.RemoveSelf()
@@ -200,18 +200,16 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 			log.Println(err)
 		}
 	}
-	if errors.Is(cause, ErrNodeExistedMasterWithdrawn) {
-		if _, err := n.Self.Node.LogReportExistedMasterWithdrawn(); err != nil {
-			log.Println(err)
-		}
+	if _, err := n.Self.Node.LogReportExistedMasterWithdrawn(); err != nil {
+		log.Println(err)
 	}
 	return nil
 }
 
 // stopSlave 停止从节点。
 func (n *Pool) stopSlave(ctx context.Context, cause error) error {
-	log.Println("stop slave")
-	n.StopSlaveWorker()
+	log.Println("Worker Slave stopping, due to", cause)
+	n.StopSlaveWorker(cause)
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
 	if errors.Is(cause, ErrNodeTakeoverMaster) { // 什么也不做。
@@ -296,7 +294,6 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 // 2. 若自己是 Slave，则通知主节点自己停机。
 // 3. 若身份未定，不做任何动作。
 func (n *Pool) Stop(ctx context.Context, cause error) {
-	log.Println("stopping, due to", cause.Error())
 	if n.IsIdentityNotDetermined() {
 		return
 	}
