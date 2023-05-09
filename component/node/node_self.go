@@ -90,7 +90,7 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (error, *http.R
 	// 此时目标主节点网络正常。
 	// 若与自己套接字相同，则视为已存在。
 	if n.Self.Node.IsSocketEqual(master) {
-		return ErrNodeMasterExisted, nil
+		return ErrNodeMasterExisted, resp
 	}
 	if resp.StatusCode != http.StatusOK {
 		var body = make([]byte, resp.ContentLength)
