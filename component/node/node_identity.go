@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 
+	"github.com/rhosocial/go-rush-producer/component"
 	base "github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/gorm"
@@ -86,7 +87,7 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
 		// 发现相同套接字的其它节点。
 		node, err := master.GetNodeBySocket()
-		log.Println(node, err)
+		// log.Println(node, err)
 		if err != gorm.ErrRecordNotFound {
 			// 若发现其它相同套接字节点，则应尝试通信。如果能获取节点状态，则应退出。
 			err := n.CheckNodeStatus(node)
@@ -245,11 +246,15 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		// 如果能正常连接，则报异常并退出。
 		// 如果不能正常连接，则检查数据库存活。
 		// 如果存活，则退出。如果并不存活。则尝试接替。
-		log.Println(master, err)
+		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+			log.Println(master, err)
+		}
 		return n.startMaster(ctx, master, err)
 	} else if identity == IdentitySlave {
 		// 指定为 Slave，失败则退出。
-		log.Println(master, err)
+		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+			log.Println(master, err)
+		}
 		// 未出错时启动从节点模式。
 		return n.startSlave(ctx, master, err)
 	} else if identity == IdentityAll {
@@ -259,7 +264,9 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		//        接替流程：删除之前的异常记录，并将其移入 node_info_legacy；再转入条件2.
 		//   1.2. 若网络成功，但返回错误或拒绝，报告主节点问题后退出。
 		// 2. 若未发现主节点，则自己设为主。
-		log.Println(master, err)
+		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
+			log.Println(master, err)
+		}
 
 		if errors.Is(err, ErrNodeLevelAlreadyHighest) {
 			// 已经是最高级，不存在上级主节点。认为自己是主节点。

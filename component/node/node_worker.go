@@ -126,7 +126,9 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 			log.Println(err)
 		}
 	}
-	// 每十秒检查一次数据表自己的信息是否与自己相等。
+	// 每十秒检查一次
+	// 1. 数据表自己的信息是否与自己相等；
+	// 2. 是否有失效节点记录。
 	intervalCheckSelf++
 	if intervalCheckSelf%10 == 0 {
 		intervalCheckSelf = 0
