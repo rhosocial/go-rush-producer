@@ -227,13 +227,13 @@ func (n *Pool) SendRequestSlaveNotifyMasterToSwitchSuperior(node *NodeInfo.NodeI
 
 // ------ SlaveNotifyMasterToSwitchSuperior ------ //
 
-var ErrNodeSlaveNodeInvalid = errors.New("the specified slave node is invalid")
+var ErrNodeSlaveInvalid = errors.New("the specified slave node is invalid")
 
 // ------ SlaveNotifyMasterToTakeover ------ //
 
 func (n *Pool) SendRequestSlaveNotifyMasterToTakeover(node *NodeInfo.NodeInfo) (*http.Response, error) {
 	if node == nil {
-		return nil, ErrNodeSlaveNodeInvalid
+		return nil, ErrNodeSlaveInvalid
 	}
 	var body = strings.NewReader(n.Self.Node.ToRegisteredNodeInfo().Encode())
 	req, err := n.PrepareNodeRequest(
@@ -419,7 +419,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 // NotifySlaveToSwitchSuperior 通知某个从节点切换主节点为 candidate。
 func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *NodeInfo.NodeInfo) (bool, error) {
 	if slave == nil {
-		return false, ErrNodeSlaveNodeInvalid
+		return false, ErrNodeSlaveInvalid
 	}
 	if candidate == nil {
 		return false, ErrNodeMasterInvalid

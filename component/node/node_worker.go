@@ -45,18 +45,20 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) {
 		log.Println(err, nodes.Master.Retry)
 	}
 	// 检查自己是否存在。
-	var respContent RequestMasterStatusResponse
-	var body = make([]byte, resp.ContentLength)
-	if _, err := resp.Body.Read(body); err != nil && err != io.EOF {
-		log.Println(ErrNodeRequestResponseError)
-	}
-	err = json.Unmarshal(body, &respContent)
-	if err != nil {
-		log.Println("Worker Slave:", err)
-	}
-	if !respContent.Data.Attended {
-		// 如果发现自己不存在，则直接停机。
-		nodes.Stop(ctx, ErrNodeSlaveNodeInvalid)
+	if resp != nil {
+		var respContent RequestMasterStatusResponse
+		var body = make([]byte, resp.ContentLength)
+		if _, err := resp.Body.Read(body); err != nil && err != io.EOF {
+			log.Println(ErrNodeRequestResponseError)
+		}
+		err = json.Unmarshal(body, &respContent)
+		if err != nil {
+			log.Println("Worker Slave:", err)
+		}
+		if !respContent.Data.Attended {
+			// 如果发现自己不存在，则直接停机。
+			nodes.Stop(ctx, ErrNodeSlaveInvalid)
+		}
 	}
 	// TODO: <参数点> 从节点检查主节点最大重试次数。
 	if nodes.Master.Retry >= 3 {

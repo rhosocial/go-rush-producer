@@ -281,6 +281,9 @@ func TestNodeInfo_IsSuperior(t *testing.T) {
 	})
 }
 
+// TestNodeInfo_RemoveSelf 测试删除自己功能。
+//
+// 删除自己时，会将自己插入到 node_info_legacy 表中。
 func TestNodeInfo_RemoveSelf(t *testing.T) {
 	setupGorm(t)
 	prepareNodeInfo(t)
@@ -294,7 +297,7 @@ func TestNodeInfo_RemoveSelf(t *testing.T) {
 
 		result, err := sub1.RemoveSelf()
 		assert.True(t, result)
-		assert.Nil(t, err)
+		assert.Nil(t, err, sub1.ID)
 
 		tx.Model(&NodeInfoLegacy.NodeInfoLegacy{}).Where("id = ?", sub1.ID).Take(&legacy)
 		assert.Equal(t, sub1.ID, legacy.ID)

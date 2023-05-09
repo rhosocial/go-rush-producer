@@ -372,7 +372,7 @@ func (n *Pool) Handover(candidate uint64) error {
 	// 交接时，候选节点必须存在。若不存在，将报错。
 	node := n.Slaves.Get(candidate)
 	if node == nil {
-		return ErrNodeSlaveNodeInvalid
+		return ErrNodeSlaveInvalid
 	}
 	//log.Println("Handover: database preparing...")
 	// 若交接主节点报错，则认为已有其它节点。

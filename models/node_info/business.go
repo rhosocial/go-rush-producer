@@ -119,6 +119,7 @@ func (m *NodeInfo) IsEqual(target *NodeInfo) error {
 		return ErrNodeIsNotEqualBecauseOfNil
 	}
 	if m.ID != target.ID {
+		log.Println(m.ID, target.ID)
 		return ErrNodeIsNotEqualBecauseOfDifferentID
 	}
 	if !m.IsSocketEqual(target) {
@@ -318,23 +319,9 @@ func (m *NodeInfo) RemoveSlaveNode(slave *NodeInfo) (bool, error) {
 //
 // 需要先判断数据库中是否存在，以避免重复删除问题。
 func (m *NodeInfo) RemoveSelf() (bool, error) {
-	tx := models.NodeInfoDB.Begin()
-	var node NodeInfo
-	tx.Model(m).Take(&node)
-	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-		tx.Rollback()
-		return true, nil
+	if tx := models.NodeInfoDB.Delete(m); tx.Error != nil {
+		return false, tx.Error
 	}
-	err := m.IsEqual(&node)
-	if err != nil {
-		tx.Rollback()
-		return false, err
-	}
-	if err := tx.Delete(m).Error; err != nil {
-		tx.Rollback()
-		return false, err
-	}
-	tx.Commit()
 	return true, nil
 }
 
