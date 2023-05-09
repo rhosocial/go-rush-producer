@@ -169,7 +169,7 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -198,7 +198,7 @@ func (n *Pool) SendRequestStatus(node *NodeInfo.NodeInfo) (*http.Response, error
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -221,7 +221,7 @@ func (n *Pool) SendRequestSlaveNotifyMasterToSwitchSuperior(node *NodeInfo.NodeI
 		log.Println(err)
 		return nil, ErrNodeRequestInvalid
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
@@ -246,7 +246,7 @@ func (n *Pool) SendRequestSlaveNotifyMasterToTakeover(node *NodeInfo.NodeInfo) (
 		log.Println(err)
 		return nil, ErrNodeRequestResponseError
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	return resp, err
 }
