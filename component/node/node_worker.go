@@ -16,8 +16,14 @@ type WorkerSlaveIntervals struct {
 	Base uint16 `json:"base"`
 }
 
+func (n *Pool) AttachWorkerSlaveWorkerCallbacks(fn func(ctx context.Context, nodes *Pool)) {
+	n.Self.workerSlaveCallbacksRWLock.Lock()
+	defer n.Self.workerSlaveCallbacksRWLock.Unlock()
+	n.Self.workerSlaveCallbacks = append(n.Self.workerSlaveCallbacks, fn)
+}
+
 // worker 以"从节点"身份执行。
-func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool, process func(ctx context.Context, nodes *Pool)) {
+func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool) {
 	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
 		log.Println("Worker Slave is working...")
 	}
@@ -34,12 +40,18 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 			log.Println("Worker Slave stopped, due to", context.Cause(ctx))
 			return
 		default:
-			process(ctx, nodes)
+			if !workerSlaveCheckMaster(ctx, nodes) {
+				continue
+			}
+			fns := nodes.Self.workerSlaveCallbacks
+			for _, fn := range fns {
+				fn(ctx, nodes)
+			}
 		}
 	}
 }
 
-func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) {
+func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 	resp, err := nodes.CheckMaster(nodes.Master.Node)
 	if err == nil {
 		nodes.Master.RetryClear()
@@ -79,21 +91,29 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) {
 			log.Println(err)
 			fresh, err := nodes.DiscoverMasterNode(false)
 			if err != nil {
-				return
+				return true
 			}
 			nodes.AcceptMaster(fresh)
-			return
+			return true
 		}
 		nodes.Supersede(nodes.Master.Node.ToRegisteredNodeInfo())
+		return false
 	}
+	return true
 }
 
 type WorkerMasterIntervals struct {
 	Base uint16 `json:"base"`
 }
 
+func (n *Pool) AttachWorkerMasterWorkerCallbacks(fn func(ctx context.Context, nodes *Pool)) {
+	n.Self.workerMasterCallbacksRWLock.Lock()
+	defer n.Self.workerMasterCallbacksRWLock.Unlock()
+	n.Self.workerMasterCallbacks = append(n.Self.workerMasterCallbacks, fn)
+}
+
 // worker 以"主节点"身份执行。
-func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals, nodes *Pool, process func(ctx context.Context, nodes *Pool)) {
+func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals, nodes *Pool) {
 	for {
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
@@ -101,7 +121,11 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 			log.Println("Worker Master stopped, due to", context.Cause(ctx))
 			return
 		default:
-			process(ctx, nodes)
+			workerMaster(ctx, nodes)
+			fns := nodes.Self.workerMasterCallbacks
+			for _, fn := range fns {
+				fn(ctx, nodes)
+			}
 		}
 	}
 }

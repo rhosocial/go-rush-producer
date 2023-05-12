@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -13,10 +14,22 @@ import (
 )
 
 type PoolSelf struct {
-	Identity    uint8
-	Node        *NodeInfo.NodeInfo
-	Alive       uint8
-	AliveRWLock sync.RWMutex
+	Identity                                 uint8
+	identitySwitchedMasterOnCallbacksRWLock  sync.RWMutex
+	identitySwitchedMasterOnCallbacks        []func()
+	identitySwitchedMasterOffCallbacksRWLock sync.RWMutex
+	identitySwitchedMasterOffCallbacks       []func()
+	identitySwitchedSlaveOnCallbacksRWLock   sync.RWMutex
+	identitySwitchedSlaveOnCallbacks         []func()
+	identitySwitchedSlaveOffCallbacksRWLock  sync.RWMutex
+	identitySwitchedSlaveOffCallbacks        []func()
+	workerMasterCallbacksRWLock              sync.RWMutex
+	workerMasterCallbacks                    []func(ctx context.Context, nodes *Pool)
+	workerSlaveCallbacksRWLock               sync.RWMutex
+	workerSlaveCallbacks                     []func(ctx context.Context, nodes *Pool)
+	Node                                     *NodeInfo.NodeInfo
+	Alive                                    uint8
+	AliveRWLock                              sync.RWMutex
 }
 
 func (ps *PoolSelf) SetLevel(level uint8) {

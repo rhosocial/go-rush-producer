@@ -236,7 +236,7 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 	n.Master.WorkerCancelFunc = cancel
 	go n.Master.worker(ctxChild, WorkerMasterIntervals{
 		Base: 1000,
-	}, n, workerMaster)
+	}, n)
 }
 
 var ErrNodeSystemSignalStopped = errors.New("received a system signal to stop")
@@ -266,7 +266,7 @@ func (n *Pool) StartSlaveWorker(ctx context.Context) {
 	//log.Printf("worker interval:%f\n", offset)
 	go n.Slaves.worker(ctxChild, WorkerSlaveIntervals{
 		Base: 1000,
-	}, n, workerSlaveCheckMaster)
+	}, n)
 }
 
 // StopSlaveWorker 停止从节点身份工作协程。

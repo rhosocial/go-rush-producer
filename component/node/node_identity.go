@@ -3,12 +3,11 @@ package node
 import (
 	"context"
 	"errors"
-	"log"
-
 	"github.com/rhosocial/go-rush-producer/component"
 	base "github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/gorm"
+	"log"
 )
 
 const (
@@ -20,24 +19,64 @@ const (
 
 var ErrNodeLevelAlreadyHighest = errors.New("it is already the highest level")
 
+func (n *Pool) AttachIdentitySwitchedMasterOnCallbacks(fn func()) {
+	n.Self.identitySwitchedMasterOnCallbacksRWLock.Lock()
+	defer n.Self.identitySwitchedMasterOnCallbacksRWLock.Unlock()
+	n.Self.identitySwitchedMasterOnCallbacks = append(n.Self.identitySwitchedMasterOnCallbacks, fn)
+}
+
+func (n *Pool) AttachIdentitySwitchedMasterOffCallbacks(fn func()) {
+	n.Self.identitySwitchedMasterOffCallbacksRWLock.Lock()
+	defer n.Self.identitySwitchedMasterOffCallbacksRWLock.Unlock()
+	n.Self.identitySwitchedMasterOffCallbacks = append(n.Self.identitySwitchedMasterOffCallbacks, fn)
+}
+
+func (n *Pool) AttachIdentitySwitchedSlaveOnCallbacks(fn func()) {
+	n.Self.identitySwitchedSlaveOnCallbacksRWLock.Lock()
+	defer n.Self.identitySwitchedSlaveOnCallbacksRWLock.Unlock()
+	n.Self.identitySwitchedSlaveOnCallbacks = append(n.Self.identitySwitchedSlaveOnCallbacks, fn)
+}
+
+func (n *Pool) AttachIdentitySwitchedSlaveOffCallbacks(fn func()) {
+	n.Self.identitySwitchedSlaveOffCallbacksRWLock.Lock()
+	defer n.Self.identitySwitchedSlaveOffCallbacksRWLock.Unlock()
+	n.Self.identitySwitchedSlaveOffCallbacks = append(n.Self.identitySwitchedSlaveOffCallbacks, fn)
+}
+
 func (n *Pool) SwitchIdentityMasterOn() {
 	log.Println("Identity switched MASTER: ON")
 	n.Self.Identity = n.Self.Identity | IdentityMaster
+	fns := n.Self.identitySwitchedMasterOnCallbacks
+	for _, fn := range fns {
+		fn()
+	}
 }
 
 func (n *Pool) SwitchIdentityMasterOff() {
 	log.Println("Identity switched MASTER: OFF")
 	n.Self.Identity = n.Self.Identity &^ IdentityMaster
+	fns := n.Self.identitySwitchedMasterOffCallbacks
+	for _, fn := range fns {
+		fn()
+	}
 }
 
 func (n *Pool) SwitchIdentitySlaveOn() {
 	log.Println("Identity switched SLAVE: ON")
 	n.Self.Identity = n.Self.Identity | IdentitySlave
+	fns := n.Self.identitySwitchedSlaveOnCallbacks
+	for _, fn := range fns {
+		fn()
+	}
 }
 
 func (n *Pool) SwitchIdentitySlaveOff() {
 	log.Println("Identity switched SLAVE: OFF")
 	n.Self.Identity = n.Self.Identity &^ IdentitySlave
+	fns := n.Self.identitySwitchedSlaveOffCallbacks
+	for _, fn := range fns {
+		fn()
+	}
 }
 
 func (n *Pool) IsIdentityMaster() bool {
