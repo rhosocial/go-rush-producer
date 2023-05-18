@@ -53,12 +53,16 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 
 func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 	resp, err := nodes.CheckMaster(nodes.Master.Node)
-	if err == nil {
-		nodes.Master.RetryClear()
-	} else {
+	if err != nil {
 		nodes.Master.RetryUp()
 		log.Println(err, nodes.Master.Retry)
 	}
+	//if err == nil {
+	//	nodes.Master.RetryClear()
+	//} else {
+	//	nodes.Master.RetryUp()
+	//	log.Println(err, nodes.Master.Retry)
+	//}
 	// 检查自己是否存在。
 	if resp != nil {
 		var respContent RequestMasterStatusResponse
@@ -73,6 +77,13 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 		if !respContent.Data.Attended {
 			// 如果发现自己不存在，则直接停机。
 			nodes.Stop(ctx, ErrNodeSlaveInvalid)
+		}
+		if respContent.Data.IsMasterWorking {
+			// 主节点正在工作，更新重试计数。
+			nodes.Master.RetryClear()
+		} else {
+			log.Println(ErrNodeMasterWorkerStopped.Error())
+			nodes.Master.RetryUp()
 		}
 	}
 	// TODO: <参数点> 从节点检查主节点最大重试次数。

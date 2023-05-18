@@ -46,6 +46,7 @@ func (ps *PoolSelf) Downgrade() {
 
 var ErrNodeMasterInvalid = errors.New("master node invalid")
 var ErrNodeMasterValidButRefused = errors.New("master is valid but refuse to communicate")
+var ErrNodeMasterWorkerStopped = errors.New("master node worker stopped")
 
 var ErrNodeMasterIsSelf = errors.New("master node is self")
 var ErrNodeMasterExisted = errors.New("a valid master node with the same socket already exists")
