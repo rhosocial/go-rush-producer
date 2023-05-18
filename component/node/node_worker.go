@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"time"
 
 	"github.com/rhosocial/go-rush-producer/component"
@@ -25,7 +24,7 @@ func (n *Pool) AttachWorkerSlaveWorkerCallbacks(fn func(ctx context.Context, nod
 // worker 以"从节点"身份执行。
 func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals, nodes *Pool) {
 	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-		log.Println("Worker Slave is working...")
+		logPrintln("Worker Slave is working...")
 	}
 	if nodes.Self.Node == nil {
 		return
@@ -37,7 +36,7 @@ func (ps *PoolSlaves) worker(ctx context.Context, interval WorkerSlaveIntervals,
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
 		case <-ctx.Done():
-			log.Println("Worker Slave stopped, due to", context.Cause(ctx))
+			logPrintln("Worker Slave stopped, due to", context.Cause(ctx))
 			return
 		default:
 			if !workerSlaveCheckMaster(ctx, nodes) {
@@ -55,24 +54,24 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 	resp, err := nodes.CheckMaster(nodes.Master.Node)
 	if err != nil {
 		nodes.Master.RetryUp()
-		log.Println(err, nodes.Master.Retry)
+		logPrintln(err, nodes.Master.Retry)
 	}
 	//if err == nil {
 	//	nodes.Master.RetryClear()
 	//} else {
 	//	nodes.Master.RetryUp()
-	//	log.Println(err, nodes.Master.Retry)
+	//	logPrintln(err, nodes.Master.Retry)
 	//}
 	// 检查自己是否存在。
 	if resp != nil {
 		var respContent RequestMasterStatusResponse
 		var body = make([]byte, resp.ContentLength)
 		if _, err := resp.Body.Read(body); err != nil && err != io.EOF {
-			log.Println(ErrNodeRequestResponseError)
+			logPrintln(ErrNodeRequestResponseError)
 		}
 		err = json.Unmarshal(body, &respContent)
 		if err != nil {
-			log.Println("Worker Slave:", err)
+			logPrintln("Worker Slave:", err)
 		}
 		if !respContent.Data.Attended {
 			// 如果发现自己不存在，则直接停机。
@@ -82,7 +81,7 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 			// 主节点正在工作，更新重试计数。
 			nodes.Master.RetryClear()
 		} else {
-			log.Println(ErrNodeMasterWorkerStopped.Error())
+			logPrintln(ErrNodeMasterWorkerStopped.Error())
 			nodes.Master.RetryUp()
 		}
 	}
@@ -91,15 +90,15 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 		go func(master *NodeInfo.NodeInfo) {
 			_, err := nodes.Self.Node.LogReportExistedNodeSlaveReportMasterInactive(master)
 			if err != nil {
-				log.Println(err)
+				logPrintln(err)
 			}
 		}(nodes.Master.Node)
 		// TODO: 重试次数过多，尝试主动接替。
-		log.Println("retried out, try to supersede:")
+		logPrintln("retried out, try to supersede:")
 		err := nodes.TrySupersede()
 		if err != nil {
 			// 表示已经有其它主节点，刷新主节点。
-			log.Println(err)
+			logPrintln(err)
 			fresh, err := nodes.DiscoverMasterNode(false)
 			if err != nil {
 				return true
@@ -129,7 +128,7 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 		time.Sleep(time.Duration(interval.Base) * time.Millisecond)
 		select {
 		case <-ctx.Done():
-			log.Println("Worker Master stopped, due to", context.Cause(ctx))
+			logPrintln("Worker Master stopped, due to", context.Cause(ctx))
 			return
 		default:
 			workerMaster(ctx, nodes)
@@ -153,12 +152,12 @@ var ErrNodeMasterRecordIsNotValid = errors.New("the record of master is not vali
 // 3. 每十秒检查一次数据表自己的信息是否与自己相等。
 func workerMaster(ctx context.Context, nodes *Pool) {
 	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-		log.Println("Worker Master is working...")
+		logPrintln("Worker Master is working...")
 	}
 	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(2, 3) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
 	if nodes.Self.AliveUpAndClearIf(10) == 9 {            // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
 		if _, err := nodes.Self.Node.LogReportActive(); err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 	}
 	// 每十秒检查一次
@@ -170,7 +169,7 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 		if !nodes.Self.CheckSelf() {
 			err := nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
 			if err != nil {
-				log.Println(err)
+				logPrintln(err)
 			}
 		}
 	}

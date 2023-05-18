@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"sync"
@@ -62,7 +61,7 @@ var ErrNodeExisted = errors.New(" a valid node with same socket already exists")
 // 2. 如果不同，则认为主节点是另一个进程。尝试与其沟通，参见 CheckMasterWithRequest。
 func (n *Pool) CheckMaster(master *NodeInfo.NodeInfo) (*http.Response, error) {
 	if master == nil {
-		log.Println("Master not specified")
+		logPrintln("Master not specified")
 		return nil, ErrNodeMasterInvalid
 	}
 	if n.Self.Node.IsSocketEqual(master) {
@@ -86,19 +85,19 @@ func (n *Pool) CheckMaster(master *NodeInfo.NodeInfo) (*http.Response, error) {
 // 其它情况没有任何错误。
 func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (*http.Response, error) {
 	if master == nil {
-		log.Println("Master not specified")
+		logPrintln("Master not specified")
 		return nil, ErrNodeMasterInvalid
 	}
 	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-		log.Printf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
+		logPrintf("Checking Master [ID: %d - %s]...\n", master.ID, master.Socket())
 	}
 	resp, err := n.SendRequestMasterStatus(master)
 	if errors.Is(err, ErrNodeRequestInvalid) {
-		log.Println("[Send Request]Master Status:", err)
+		logPrintln("[Send Request]Master Status:", err)
 		return resp, ErrNodeRequestInvalid
 	}
 	if err != nil {
-		log.Println("[Send Request]Master Status:", err)
+		logPrintln("[Send Request]Master Status:", err)
 		return resp, ErrNodeRequestResponseError
 	}
 	// 此时目标主节点网络正常。
@@ -111,7 +110,7 @@ func (n *Pool) CheckMasterWithRequest(master *NodeInfo.NodeInfo) (*http.Response
 		if _, err := resp.Body.Read(body); err != nil && err != io.EOF {
 			return resp, ErrNodeRequestResponseError
 		}
-		log.Println(string(body))
+		logPrintln(string(body))
 		return resp, ErrNodeMasterValidButRefused
 	}
 	return resp, nil
@@ -140,10 +139,10 @@ func (ps *PoolSelf) CheckSelf() bool {
 	err = ps.Node.IsEqual(node)
 	if err == nil {
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-			log.Println("Check self: valid")
+			logPrintln("Check self: valid")
 		}
 	} else {
-		log.Println("Check self:", err)
+		logPrintln("Check self:", err)
 	}
 	return err == nil
 }

@@ -3,11 +3,11 @@ package node
 import (
 	"context"
 	"errors"
+
 	"github.com/rhosocial/go-rush-producer/component"
 	base "github.com/rhosocial/go-rush-producer/models"
 	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 	"gorm.io/gorm"
-	"log"
 )
 
 const (
@@ -44,7 +44,7 @@ func (n *Pool) AttachIdentitySwitchedSlaveOffCallbacks(fn func()) {
 }
 
 func (n *Pool) SwitchIdentityMasterOn() {
-	log.Println("Identity switched MASTER: ON")
+	logPrintln("Identity switched MASTER: ON")
 	n.Self.Identity = n.Self.Identity | IdentityMaster
 	fns := n.Self.identitySwitchedMasterOnCallbacks
 	for _, fn := range fns {
@@ -53,7 +53,7 @@ func (n *Pool) SwitchIdentityMasterOn() {
 }
 
 func (n *Pool) SwitchIdentityMasterOff() {
-	log.Println("Identity switched MASTER: OFF")
+	logPrintln("Identity switched MASTER: OFF")
 	n.Self.Identity = n.Self.Identity &^ IdentityMaster
 	fns := n.Self.identitySwitchedMasterOffCallbacks
 	for _, fn := range fns {
@@ -62,7 +62,7 @@ func (n *Pool) SwitchIdentityMasterOff() {
 }
 
 func (n *Pool) SwitchIdentitySlaveOn() {
-	log.Println("Identity switched SLAVE: ON")
+	logPrintln("Identity switched SLAVE: ON")
 	n.Self.Identity = n.Self.Identity | IdentitySlave
 	fns := n.Self.identitySwitchedSlaveOnCallbacks
 	for _, fn := range fns {
@@ -71,7 +71,7 @@ func (n *Pool) SwitchIdentitySlaveOn() {
 }
 
 func (n *Pool) SwitchIdentitySlaveOff() {
-	log.Println("Identity switched SLAVE: OFF")
+	logPrintln("Identity switched SLAVE: OFF")
 	n.Self.Identity = n.Self.Identity &^ IdentitySlave
 	fns := n.Self.identitySwitchedSlaveOffCallbacks
 	for _, fn := range fns {
@@ -101,17 +101,17 @@ func (n *Pool) IsIdentityNotDetermined() bool {
 //
 // 3. 如果存在主节点数据，则尝试检查主节点。参见 CheckMaster。
 func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, error) {
-	log.Println("Discover master...")
+	logPrintln("Discover master...")
 	if n.Self.Node.Level == 0 {
 		return nil, ErrNodeLevelAlreadyHighest
 	}
 	node, err := n.Self.Node.GetSuperiorNode(specifySuperior)
 	if err == nil {
-		log.Print("Discovered master: ", node.Log())
+		logPrint("Discovered master: ", node.Log())
 		_, err = n.CheckMaster(node)
 		return node, err
 	}
-	log.Println("Error(s) reported when discovering master record: ", err)
+	logPrintln("Error(s) reported when discovering master record: ", err)
 	return nil, err
 }
 
@@ -126,12 +126,12 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
 		// 发现相同套接字的其它节点。
 		node, err := master.GetNodeBySocket()
-		// log.Println(node, err)
+		// logPrintln(node, err)
 		if err != gorm.ErrRecordNotFound {
 			// 若发现其它相同套接字节点，则应尝试通信。如果能获取节点状态，则应退出。
 			err := n.CheckNodeStatus(node)
 			if err != nil {
-				log.Println(err)
+				logPrintln(err)
 			}
 		}
 		if !n.CommitSelfAsMasterNode() {
@@ -162,7 +162,7 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 		}
 		n.Slaves.Refresh(nodes)
 	} else if cause != nil { // 此判断必须放在最后作为兜底。
-		log.Println(cause)
+		logPrintln(cause)
 		return cause
 	}
 	n.Self.Node = master
@@ -171,7 +171,7 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 	n.SwitchIdentityMasterOn()
 	if isMasterFresh {
 		if _, err := n.Self.Node.LogReportFreshMasterJoined(); err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 	}
 	n.StartMasterWorker(ctx)
@@ -202,7 +202,7 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 		// 主节点已存在，直接退出。
 		return cause
 	} else if cause != nil {
-		log.Println(cause)
+		logPrintln(cause)
 		return cause
 	}
 	// 未出错，则接受主节点，并通知其将自己加入。
@@ -210,7 +210,7 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 	n.AcceptMaster(master)
 	_, cause = n.NotifyMasterToAddSelfAsSlave()
 	if cause != nil {
-		log.Fatalln(cause)
+		logFatalln(cause)
 	}
 
 	n.StartSlaveWorker(ctx)
@@ -220,7 +220,7 @@ func (n *Pool) startSlave(ctx context.Context, master *NodeInfo.NodeInfo, cause 
 
 // stopMaster 停止主节点。
 func (n *Pool) stopMaster(ctx context.Context, cause error) error {
-	log.Println("Worker Master stopping, due to", cause)
+	logPrintln("Worker Master stopping, due to", cause)
 	n.StopMasterWorker(cause)
 	n.SwitchIdentityMasterOff()
 	// 通知所有从节点停机或选择一个从节点并通知其接替自己。
@@ -232,37 +232,37 @@ func (n *Pool) stopMaster(ctx context.Context, cause error) error {
 	} else if candidateID == 0 { // 没有候选接替节点，删除自己。
 		_, err := n.Self.Node.RemoveSelf()
 		if err != nil {
-			log.Println("Failed to stop self:", err)
+			logPrintln("Failed to stop self:", err)
 		}
 	} else {
 		err := n.Handover(candidateID)
 		if err != nil {
-			log.Println(err)
+			logPrintln(err)
 			return err
 		}
 		if _, err := n.NotifyAllSlavesToSwitchSuperior(candidateID); err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 		if _, err := n.NotifySlaveToTakeoverSelf(candidateID); err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 	}
 	if _, err := n.Self.Node.LogReportExistedMasterWithdrawn(); err != nil {
-		log.Println(err)
+		logPrintln(err)
 	}
 	return nil
 }
 
 // stopSlave 停止从节点。
 func (n *Pool) stopSlave(ctx context.Context, cause error) error {
-	log.Println("Worker Slave stopping, due to", cause)
+	logPrintln("Worker Slave stopping, due to", cause)
 	n.StopSlaveWorker(cause)
 	n.SwitchIdentitySlaveOff()
 	// 通知主节点自己停机。
 	if errors.Is(cause, ErrNodeTakeoverMaster) { // 什么也不做。
 	} else { // 其它原因停机需要通知主节点删除自己。忽略错误。
 		if _, err := n.NotifyMasterToRemoveSelf(); err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 	}
 	return nil
@@ -286,13 +286,13 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		// 如果不能正常连接，则检查数据库存活。
 		// 如果存活，则退出。如果并不存活。则尝试接替。
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-			log.Println(master, err)
+			logPrintln(master, err)
 		}
 		return n.startMaster(ctx, master, err)
 	} else if identity == IdentitySlave {
 		// 指定为 Slave，失败则退出。
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-			log.Println(master, err)
+			logPrintln(master, err)
 		}
 		// 未出错时启动从节点模式。
 		return n.startSlave(ctx, master, err)
@@ -304,7 +304,7 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		//   1.2. 若网络成功，但返回错误或拒绝，报告主节点问题后退出。
 		// 2. 若未发现主节点，则自己设为主。
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-			log.Println(master, err)
+			logPrintln(master, err)
 		}
 
 		if errors.Is(err, ErrNodeLevelAlreadyHighest) {
@@ -328,14 +328,14 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		} else if errors.Is(err, ErrNodeRequestResponseError) || errors.Is(err, ErrNodeMasterValidButRefused) {
 			// 请求响应失败，将自己作为主。将异常节点删除。
 			if _, err := master.RemoveSelf(); err != nil {
-				log.Println(err)
+				logPrintln(err)
 			}
 			return n.startMaster(ctx, n.Self.Node, ErrNodeRequestResponseError)
 		} else if errors.Is(err, ErrNodeMasterExisted) {
 			// 主节点已存在，设置自己为从节点。
 			return n.startSlave(ctx, master, nil)
 		} else if err != nil {
-			log.Println(err)
+			logPrintln(err)
 			return err
 		}
 		// 未出错时启动主节点模式。
@@ -360,13 +360,13 @@ func (n *Pool) Stop(ctx context.Context, cause error) {
 	if n.IsIdentityMaster() {
 		err := n.stopMaster(ctx, cause)
 		if err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 	}
 	if n.IsIdentitySlave() {
 		err := n.stopSlave(ctx, cause)
 		if err != nil {
-			log.Println(err)
+			logPrintln(err)
 		}
 	}
 }
@@ -389,25 +389,25 @@ func (n *Pool) Supersede(master *base.RegisteredNodeInfo) {
 	real, err := NodeInfo.GetNodeInfo(master.ID)
 	if err != gorm.ErrRecordNotFound {
 		// 如果还存在，则不能取代。
-		log.Println(real.Log())
+		logPrintln(real.Log())
 		return
 	}
 	// 刷新自己，已经是 master 。
 	if err := n.Self.Node.Refresh(); err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return
 	}
 	// 刷新成功，停止从节点身份；清除主节点信息。
 	err = n.stopSlave(context.Background(), ErrNodeTakeoverMaster)
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return
 	}
 	n.Master.Clear()
 	// 启动主节点身份。
 	err = n.startMaster(context.Background(), n.Self.Node, ErrNodeExistedMasterWithdrawn)
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return
 	}
 	// 此时从节点为空，需要刷新。
@@ -424,20 +424,20 @@ func (n *Pool) Handover(candidate uint64) error {
 	if node == nil {
 		return ErrNodeSlaveInvalid
 	}
-	//log.Println("Handover: database preparing...")
+	//logPrintln("Handover: database preparing...")
 	// 若交接主节点报错，则认为已有其它节点。
 	err := n.Self.Node.HandoverMasterNode(node)
 	if err != nil {
-		log.Println("Handover error(s) reported:", err)
+		logPrintln("Handover error(s) reported:", err)
 		return err
 	}
 	//info, err := NodeInfo.GetNodeInfo(candidate)
 	//if err != nil {
 	//	return err
 	//} else {
-	//	log.Println(info.Log())
+	//	logPrintln(info.Log())
 	//}
-	//log.Println("Handover: database finished.")
+	//logPrintln("Handover: database finished.")
 	// 此时已认为交接成功。
 	return nil
 }

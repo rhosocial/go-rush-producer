@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 
 	"github.com/rhosocial/go-rush-producer/component"
@@ -62,7 +61,7 @@ func getIPFromAddr(addr net.Addr) net.IP {
 		return nil
 	}
 	if ip.IsLoopback() {
-		log.Println("loopback address found: ", ip)
+		logPrintln("loopback address found: ", ip)
 		return nil
 	}
 	ipv4 := ip.To4()
@@ -102,7 +101,7 @@ func NewNodePool(self *NodeInfo.NodeInfo) *Pool {
 	nodes.Slaves.DetectInactiveCallback = nodes.DetectSlaveNodeInactiveCallback
 	err := nodes.RefreshSelfSocket()
 	if err != nil {
-		log.Fatalln(err)
+		logFatalln(err)
 		return nil
 	}
 	return &nodes
@@ -116,20 +115,20 @@ func (n *Pool) CommitSelfAsMasterNode() bool {
 	if err == nil {
 		return true
 	}
-	log.Println(err)
+	logPrintln(err)
 	return false
 }
 
 // AcceptSlave 接受从节点。
 func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, error) {
-	log.Println(node.Log())
+	logPrintln(node.Log())
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	// 检查 n.Slaves 是否存在该节点。
 	// 如果存在，则直接返回。
 	n.RefreshSlavesNodeInfo()
 	if slave := n.Slaves.CheckIfExists(node); slave != nil {
-		log.Println("The specified slave node record already exists.")
+		logPrintln("The specified slave node record already exists.")
 		return slave, nil
 	}
 	// 如果不存在，则加入该节点为从节点。
@@ -157,7 +156,7 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, erro
 	}
 	n.Slaves.Nodes[slave.ID] = slave
 	if _, err := n.Self.Node.LogReportFreshSlaveJoined(&slave); err != nil {
-		log.Println(err)
+		logPrintln(err)
 	}
 	return &slave, nil
 }
@@ -166,7 +165,7 @@ func (n *Pool) AcceptSlave(node *models.FreshNodeInfo) (*NodeInfo.NodeInfo, erro
 func (n *Pool) AcceptMaster(master *NodeInfo.NodeInfo) {
 	n.Master.Accept(master)
 	if err := n.Self.Node.Refresh(); err != nil {
-		log.Println(err)
+		logPrintln(err)
 	}
 	n.RefreshSlavesNodeInfo()
 }
@@ -177,7 +176,7 @@ func (n *Pool) AcceptMaster(master *NodeInfo.NodeInfo) {
 //
 // 2. 调用 Self 模型的删除从节点信息。删除成功后，将其从 Slaves 删除。
 func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error) {
-	log.Printf("Remove Slave: %d\n", id)
+	logPrintf("Remove Slave: %d\n", id)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	slave, err := n.Slaves.Check(id, fresh)
@@ -189,7 +188,7 @@ func (n *Pool) RemoveSlave(id uint64, fresh *models.FreshNodeInfo) (bool, error)
 	}
 	delete(n.Slaves.Nodes, id)
 	if _, err := n.Self.Node.LogReportExistedSlaveWithdrawn(slave); err != nil {
-		log.Println(err)
+		logPrintln(err)
 	}
 	return true, nil
 }
@@ -203,7 +202,7 @@ func (n *Pool) RefreshSlavesStatus() ([]uint64, []uint64) {
 	for i, slave := range n.Slaves.Nodes {
 		if _, err := n.GetSlaveStatus(i); err != nil {
 			if _, err := n.Self.Node.RemoveSlaveNode(&slave); err != nil {
-				log.Println(err)
+				logPrintln(err)
 			}
 			delete(n.Slaves.Nodes, i)
 			removed = append(removed, i)
@@ -283,7 +282,7 @@ func (n *Pool) StopSlaveWorker(cause error) {
 
 func (n *Pool) DetectSlaveNodeInactiveCallback(id uint64, retry uint8) {
 	if _, err := n.Self.Node.LogReportExistedNodeMasterDetectedSlaveInactive(id, retry); err != nil {
-		log.Println(err)
+		logPrintln(err)
 	}
 }
 

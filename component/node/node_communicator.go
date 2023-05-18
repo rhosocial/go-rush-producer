@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,7 +60,7 @@ func (n *Pool) SendRequestMasterStatus(master *NodeInfo.NodeInfo) (*http.Respons
 	}
 	req, err := n.PrepareNodeRequest(RequestMethodMasterStatus, RequestURLFormatMasterStatus, master.Socket(), nil, "")
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -106,7 +105,7 @@ func (n *Pool) SendRequestMasterToAddSelfAsSlave() (*http.Response, error) {
 	var body = strings.NewReader(self.Encode())
 	req, err := n.PrepareNodeRequest(RequestMethodMasterNotifyAdd, RequestURLFormatMasterNotifyAdd, n.Master.Node.Socket(), body, "application/x-www-form-urlencoded")
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -135,7 +134,7 @@ func (n *Pool) SendRequestMasterToRemoveSelf() (*http.Response, error) {
 	query := fmt.Sprintf("?id=%d&%s", n.Self.Node.ID, fresh.Encode())
 	req, err := n.PrepareNodeRequest(RequestMethodMasterNotifyDelete, RequestURLFormatMasterNotifyDelete+query, n.Master.Node.Socket(), nil, "")
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	req.Header.Add(RequestHeaderXAuthorizationTokenKey, RequestHeaderXAuthorizationTokenValue)
@@ -166,7 +165,7 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 	}
 	req, err := n.PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatSlaveStatus, slave.Socket(), nil, "")
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -180,22 +179,22 @@ func (n *Pool) SendRequestSlaveStatus(id uint64) (*http.Response, error) {
 
 func (n *Pool) CheckNodeStatus(node *NodeInfo.NodeInfo) error {
 	resp, err := n.SendRequestStatus(node)
-	log.Println(node, err)
+	logPrintln(node, err)
 	if resp != nil && resp.StatusCode == http.StatusOK {
 		// 请求正常，应当退出。
 		return ErrNodeExisted
 	}
 	inactive, err := n.Self.Node.LogReportExistedNodeMasterReportSlaveInactive(node)
-	log.Println(inactive, err)
+	logPrintln(inactive, err)
 	self, err := node.RemoveSelf()
-	log.Println(self, err)
+	logPrintln(self, err)
 	return err
 }
 
 func (n *Pool) SendRequestStatus(node *NodeInfo.NodeInfo) (*http.Response, error) {
 	req, err := n.PrepareNodeRequest(RequestMethodSlaveStatus, RequestURLFormatStatus, node.Socket(), nil, "")
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -218,7 +217,7 @@ func (n *Pool) SendRequestSlaveNotifyMasterToSwitchSuperior(node *NodeInfo.NodeI
 		node.Socket(), body, "application/x-www-form-urlencoded",
 	)
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestInvalid
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -243,7 +242,7 @@ func (n *Pool) SendRequestSlaveNotifyMasterToTakeover(node *NodeInfo.NodeInfo) (
 		node.Socket(), body, "application/x-www-form-urlencoded",
 	)
 	if err != nil {
-		log.Println(err)
+		logPrintln(err)
 		return nil, ErrNodeRequestResponseError
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -268,7 +267,7 @@ func (n *Pool) PrepareNodeRequest(method string, urlFormat string, socket string
 		req.Header.Add("Content-Type", contentType)
 	}
 	if err != nil {
-		log.Printf("[Prepare Request][method:%s][url%s][error:%s]\n", method, URL, err.Error())
+		logPrintf("[Prepare Request][method:%s][url%s][error:%s]\n", method, URL, err.Error())
 	}
 	return req, err
 }
@@ -308,24 +307,24 @@ type NotifyMasterToAddSelfAsSlaveResponse = response.Generic[NotifyMasterToAddSe
 func (n *Pool) NotifyMasterToAddSelfAsSlave() (bool, error) {
 	resp, err := n.SendRequestMasterToAddSelfAsSlave()
 	if err != nil {
-		log.Println("[Send Request]Notify master to add self as slave:", err)
+		logPrintln("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	var body = make([]byte, resp.ContentLength)
 	_, err = resp.Body.Read(body)
 	if err != io.EOF && err != nil {
-		log.Println("[Send Request]Notify master to add self as slave:", err)
+		logPrintln("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		err = errors.New(string(body))
-		log.Println("[Send Request]Notify master to add self as slave:", err)
+		logPrintln("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	respData := NotifyMasterToAddSelfAsSlaveResponse{}
 	err = json.Unmarshal(body, &respData)
 	if err != nil {
-		log.Println("[Send Request]Notify master to add self as slave:", err)
+		logPrintln("[Send Request]Notify master to add self as slave:", err)
 		return false, err
 	}
 	// 校验成功，将返回的ID作为自己的ID。
@@ -354,10 +353,10 @@ func (n *Pool) NotifyMasterToRemoveSelf() (bool, error) {
 // NotifySlaveToTakeoverSelf 当前节点（主节点）通知从节点接替自己。
 func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	if n.Slaves.Count() == 0 {
-		log.Println("no slave nodes")
+		logPrintln("no slave nodes")
 		return true, nil
 	} // 如果没有从节点，则不必通知。
-	log.Printf("Notify slave[%d] to take over\n", candidateID)
+	logPrintf("Notify slave[%d] to take over\n", candidateID)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	var candidate NodeInfo.NodeInfo
@@ -371,16 +370,16 @@ func (n *Pool) NotifySlaveToTakeoverSelf(candidateID uint64) (bool, error) {
 	// 需要确保此时已删除当前节点信息，同时更新好目标接替节点信息和其他节点信息。
 	resp, err := n.SendRequestSlaveNotifyMasterToTakeover(&candidate)
 	if err != nil {
-		log.Println("[Send Request]Master notify slave to takeover:", err)
+		logPrintln("[Send Request]Master notify slave to takeover:", err)
 		return false, err
 	}
 	if resp != nil {
 		var body = make([]byte, resp.ContentLength)
 		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
-			log.Println("[Send Request]Master notify slave to takeover:", err)
+			logPrintln("[Send Request]Master notify slave to takeover:", err)
 		}
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-			log.Println(resp.StatusCode, string(body))
+			logPrintln(resp.StatusCode, string(body))
 		}
 	}
 	return true, nil
@@ -391,7 +390,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 	n.Slaves.NodesRWLock.Lock()
 	defer n.Slaves.NodesRWLock.Unlock()
 	if n.Slaves.Count() <= 1 {
-		log.Println("no other slaves to be notified to switch superior")
+		logPrintln("no other slaves to be notified to switch superior")
 		return true, nil
 	}
 	// 挑出候选节点。
@@ -403,7 +402,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 		}
 	}
 	// 通知其它节点切换。并行发起切换通知请求。
-	// log.Println(n.Slaves.Nodes)
+	// logPrintln(n.Slaves.Nodes)
 	for i := range n.Slaves.Nodes {
 		if i != candidateID {
 			// 这里不可以直接传递 v，因为这可能会导致访问到同一个map元素，而非按顺序遍历。
@@ -411,7 +410,7 @@ func (n *Pool) NotifyAllSlavesToSwitchSuperior(candidateID uint64) (bool, error)
 			go func(slave *NodeInfo.NodeInfo, candidate *NodeInfo.NodeInfo) {
 				_, err := n.NotifySlaveToSwitchSuperior(slave, candidate)
 				if err != nil {
-					log.Println(err)
+					logPrintln(err)
 				}
 			}(n.Slaves.Get(i), &candidate)
 		}
@@ -427,19 +426,19 @@ func (n *Pool) NotifySlaveToSwitchSuperior(slave *NodeInfo.NodeInfo, candidate *
 	if candidate == nil {
 		return false, ErrNodeMasterInvalid
 	}
-	log.Printf("Notify slave[%d] to switch superior[%d]\n", slave.ID, candidate.ID)
+	logPrintf("Notify slave[%d] to switch superior[%d]\n", slave.ID, candidate.ID)
 	resp, err := n.SendRequestSlaveNotifyMasterToSwitchSuperior(slave, candidate) // 不关心响应。
 	if err != nil {
-		log.Println("[Send Request]Master notify slave to switch superior:", err)
+		logPrintln("[Send Request]Master notify slave to switch superior:", err)
 		return false, err
 	}
 	if resp != nil {
 		var body = make([]byte, resp.ContentLength)
 		if _, err := resp.Body.Read(body); err != nil && !errors.Is(err, io.EOF) {
-			log.Println("[Send Request]Master notify slave to switch superior:", err)
+			logPrintln("[Send Request]Master notify slave to switch superior:", err)
 		}
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
-			log.Println(resp.StatusCode, string(body))
+			logPrintln(resp.StatusCode, string(body))
 		}
 	}
 	return true, nil

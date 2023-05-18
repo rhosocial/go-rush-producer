@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"log"
 	"math"
 	"sync"
 
@@ -122,7 +121,7 @@ func (ps *PoolSlaves) GetRetry(id uint64) uint8 {
 // 返回被删除的节点ID数组指针。
 func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(limitInactive uint8, limitRemoved uint8) *[]uint64 {
 	if limitInactive >= limitRemoved {
-		log.Printf("Warning! the limit of inactive(%d) is greater than or equal to limit of removed(%d).\n", limitInactive, limitRemoved)
+		logPrintf("Warning! the limit of inactive(%d) is greater than or equal to limit of removed(%d).\n", limitInactive, limitRemoved)
 	}
 	ps.NodesRWLock.Lock()
 	defer ps.NodesRWLock.Unlock()
@@ -137,7 +136,7 @@ func (ps *PoolSlaves) RetryUpAllAndRemoveIfRetriedOut(limitInactive uint8, limit
 			if node != nil {
 				_, err := node.RemoveSelf()
 				if err != nil {
-					log.Println(err)
+					logPrintln(err)
 				}
 			}
 			delete(ps.Nodes, i)
