@@ -118,6 +118,7 @@ func (n *Pool) DiscoverMasterNode(specifySuperior bool) (*NodeInfo.NodeInfo, err
 // startMaster 以"主节点"身份启动。
 //
 // master 为指定的"主节点"。
+// 若主节点为空，且原因也为空，则指定自己为主节点。
 func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause error) error {
 	isMasterFresh := false
 	if errors.Is(cause, ErrNodeLevelAlreadyHighest) {
@@ -125,14 +126,20 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 	} else if errors.Is(cause, NodeInfo.ErrNodeSuperiorNotExist) || errors.Is(cause, ErrNodeRequestResponseError) {
 		// 主节点不存在，将自己作为主节点。需要更新数据库。
 		// 发现相同套接字的其它节点。
-		node, err := master.GetNodeBySocket()
-		// logPrintln(node, err)
-		if err != gorm.ErrRecordNotFound {
-			// 若发现其它相同套接字节点，则应尝试通信。如果能获取节点状态，则应退出。
-			err := n.CheckNodeStatus(node)
-			if err != nil {
-				logPrintln(err)
+		if master == nil {
+			master = n.Self.Node
+		} else {
+			node, err := master.GetNodeBySocket()
+			// logPrintln(node, err)
+			if err != gorm.ErrRecordNotFound {
+				// 若发现其它相同套接字节点，则应尝试通信。如果能获取节点状态，则应退出。
+				err := n.CheckNodeStatus(node)
+				if err != nil {
+					logPrintln(err)
+					return ErrNodeMasterExisted
+				}
 			}
+			// 若数据库信息不存在，则直接接替。
 		}
 		if !n.CommitSelfAsMasterNode() {
 			return NodeInfo.ErrNodeDatabaseError
@@ -165,7 +172,18 @@ func (n *Pool) startMaster(ctx context.Context, master *NodeInfo.NodeInfo, cause
 		logPrintln(cause)
 		return cause
 	}
-	n.Self.Node = master
+	if master == nil {
+		if cause == nil {
+			// 若主节点为空，且原因也为空，则指定自己为主节点。
+			if !n.CommitSelfAsMasterNode() {
+				return NodeInfo.ErrNodeDatabaseError
+			}
+			isMasterFresh = true
+		}
+	} else {
+		// 若主节点由内容，则视为指定 master。
+		n.Self.Node = master
+	}
 	// 主节点身份不变。
 	// n.Master.Node = nil
 	n.SwitchIdentityMasterOn()
@@ -287,6 +305,10 @@ func (n *Pool) Start(ctx context.Context, identity int) error {
 		// 如果存活，则退出。如果并不存活。则尝试接替。
 		if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
 			logPrintln(master, err)
+		}
+		if err == nil {
+			// 发现主节点，并工作正常。直接退出。
+			return ErrNodeMasterExisted
 		}
 		return n.startMaster(ctx, master, err)
 	} else if identity == IdentitySlave {

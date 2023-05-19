@@ -30,6 +30,11 @@ func (c *ControllerServer) RegisterActions(r *gin.Engine) {
 				// 删除
 				controllerSlaveNotifyMaster.DELETE("", c.ActionSlaveNotifyMasterRemoveSelf)
 			}
+			controllerAction := controllerMaster.Group("/action")
+			{
+				controllerAction.POST("/start", c.ActionStart)
+				controllerAction.POST("/stop", c.ActionStop)
+			}
 		}
 		// 从节点
 		controllerSlave := group.Group("/slave")

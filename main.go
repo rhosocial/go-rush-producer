@@ -86,7 +86,10 @@ func configCluster(identity int) {
 	models.NodeInfoDB = db
 	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", "0.0.1", *(*(*component.GlobalEnv).Net).ListenPort, 1)
 	node.Nodes = node.NewNodePool(self)
-	node.Nodes.Start(context.Background(), identity)
+	err = node.Nodes.Start(context.Background(), identity)
+	if err != nil {
+		log.Println(err)
+	}
 	// defer node.Nodes.Stop(context.Background(), node.ErrNodeWorkerStopped)
 	// For-loop
 	if node.Nodes.Self.Identity == node.IdentityNotDetermined {

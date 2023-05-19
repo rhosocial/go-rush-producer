@@ -1,6 +1,7 @@
 package controllerServer
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"github.com/rhosocial/go-rush-producer/component"
 	"github.com/rhosocial/go-rush-producer/component/node"
 	base "github.com/rhosocial/go-rush-producer/models"
+	NodeInfo "github.com/rhosocial/go-rush-producer/models/node_info"
 )
 
 // ActionSlaveGetMasterStatus 从节点发起获取主节点（自己）状态的请求。
@@ -157,4 +159,28 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 		return
 	}
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
+}
+
+func (c *ControllerServer) ActionStart(r *gin.Context) {
+	if node.Nodes.Master.IsWorking() {
+		r.AbortWithStatusJSON(http.StatusConflict, c.NewResponseGeneric(r, 1, "master worker is working", nil, nil))
+		return
+	}
+	self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", "0.0.1", *(*(*component.GlobalEnv).Net).ListenPort, 1)
+	node.Nodes = node.NewNodePool(self)
+	err := node.Nodes.Start(context.Background(), node.IdentityMaster)
+	if err != nil {
+		r.AbortWithStatusJSON(http.StatusBadRequest, c.NewResponseGeneric(r, 1, "failed to start master worker", err.Error(), nil))
+		return
+	}
+	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", nil, nil))
+}
+
+func (c *ControllerServer) ActionStop(r *gin.Context) {
+	if !node.Nodes.Master.IsWorking() {
+		r.AbortWithStatusJSON(http.StatusConflict, c.NewResponseGeneric(r, 1, "master worker is not working", nil, nil))
+		return
+	}
+	node.Nodes.Stop(context.Background(), node.ErrNodeEndpointStopped)
+	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", node.Nodes.Master.IsWorking(), nil))
 }

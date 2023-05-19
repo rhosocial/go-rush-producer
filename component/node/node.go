@@ -239,6 +239,7 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 }
 
 var ErrNodeSystemSignalStopped = errors.New("received a system signal to stop")
+var ErrNodeEndpointStopped = errors.New("received an endpoint signal to stop")
 
 // StopMasterWorker 停止主节点身份工作协程。
 func (n *Pool) StopMasterWorker(cause error) {
