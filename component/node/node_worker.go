@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/rhosocial/go-rush-producer/component"
@@ -74,8 +75,14 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 			logPrintln("Worker Slave:", err)
 		}
 		if !respContent.Data.Attended {
-			// 如果发现自己不存在，则直接停机。
+			// 如果发现自己不存在，则尝试重新加入。
 			nodes.Stop(ctx, ErrNodeSlaveInvalid)
+			self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", "0.0.1", *(*(*component.GlobalEnv).Net).ListenPort, 1)
+			Nodes = NewNodePool(self)
+			err := nodes.Start(ctx, IdentitySlave)
+			if err != nil {
+				logPrintln(err)
+			}
 		}
 		if respContent.Data.IsMasterWorking {
 			// 主节点正在工作，更新重试计数。
@@ -141,6 +148,7 @@ func (pm *PoolMaster) worker(ctx context.Context, interval WorkerMasterIntervals
 }
 
 var intervalCheckSelf = 0
+var intervalCheckSelfRWMutex sync.RWMutex
 var ErrNodeMasterRecordIsNotValid = errors.New("the record of master is not valid")
 
 // workerMaster 主节点任务。
@@ -155,22 +163,26 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 		logPrintln("Worker Master is working...")
 	}
 	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(2, 3) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
-	if nodes.Self.AliveUpAndClearIf(10) == 9 {            // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
-		if _, err := nodes.Self.Node.LogReportActive(); err != nil {
-			logPrintln(err)
-		}
-	}
-	// 每十秒检查一次
-	// 1. 数据表自己的信息是否与自己相等；
-	// 2. 是否有失效节点记录。
-	intervalCheckSelf++
-	if intervalCheckSelf%10 == 0 {
-		intervalCheckSelf = 0
-		if !nodes.Self.CheckSelf() {
-			err := nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
-			if err != nil {
+	go func() {
+		if nodes.Self.AliveUpAndClearIf(10) == 9 { // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
+			if _, err := nodes.Self.Node.LogReportActive(); err != nil {
 				logPrintln(err)
 			}
 		}
-	}
+		// 每十秒检查一次
+		// 1. 数据表自己的信息是否与自己相等；
+		// 2. 是否有失效节点记录。
+		intervalCheckSelfRWMutex.Lock()
+		defer intervalCheckSelfRWMutex.Unlock()
+		intervalCheckSelf++
+		if intervalCheckSelf%10 == 0 {
+			intervalCheckSelf = 0
+			if !nodes.Self.CheckSelf() {
+				err := nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
+				if err != nil {
+					logPrintln(err)
+				}
+			}
+		}
+	}()
 }
