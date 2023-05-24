@@ -76,10 +76,10 @@ func workerSlaveCheckMaster(ctx context.Context, nodes *Pool) bool {
 		}
 		if !respContent.Data.Attended {
 			// 如果发现自己不存在，则尝试重新加入。
-			nodes.Stop(ctx, ErrNodeSlaveInvalid)
+			nodes.Stop(ErrNodeSlaveInvalid)
 			self := NodeInfo.NewNodeInfo("GO-RUSH-PRODUCER", "0.0.1", *(*(*component.GlobalEnv).Net).ListenPort, 1)
 			Nodes = NewNodePool(self)
-			err := nodes.Start(ctx, IdentitySlave)
+			err := nodes.Start(context.Background(), IdentitySlave)
 			if err != nil {
 				logPrintln(err)
 			}
@@ -162,7 +162,7 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 	if (*component.GlobalEnv).RunningMode == component.RunningModeDebug {
 		logPrintln("Worker Master is working...")
 	}
-	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(2, 3) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
+	go nodes.Slaves.RetryUpAllAndRemoveIfRetriedOut(3, 4) // 1. 调增所有子节点重试次数。超过重试次数上限则直接删除，并不通知对方。TODO: <参数点> 超限次数，最小不应低于3。
 	go func() {
 		if nodes.Self.AliveUpAndClearIf(10) == 9 { // 2. 报告自己活跃。 TODO: <参数点> 报告活跃间隔。
 			if _, err := nodes.Self.Node.LogReportActive(); err != nil {
@@ -178,7 +178,7 @@ func workerMaster(ctx context.Context, nodes *Pool) {
 		if intervalCheckSelf%10 == 0 {
 			intervalCheckSelf = 0
 			if !nodes.Self.CheckSelf() {
-				err := nodes.stopMaster(ctx, ErrNodeMasterRecordIsNotValid)
+				err := nodes.stopMaster(ErrNodeMasterRecordIsNotValid)
 				if err != nil {
 					logPrintln(err)
 				}

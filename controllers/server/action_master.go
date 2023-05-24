@@ -154,7 +154,6 @@ func (c *ControllerServer) ActionSlaveNotifyMasterRemoveSelf(r *gin.Context) {
 			r.AbortWithStatusJSON(http.StatusForbidden, c.NewResponseGeneric(r, 1, "failed to remove slave", err.Error(), nil))
 			return
 		}
-		r.Error(err)
 		r.AbortWithStatusJSON(http.StatusInternalServerError, c.NewResponseGeneric(r, 1, "failed to remove slave", err.Error(), nil))
 		return
 	}
@@ -181,6 +180,6 @@ func (c *ControllerServer) ActionStop(r *gin.Context) {
 		r.AbortWithStatusJSON(http.StatusConflict, c.NewResponseGeneric(r, 1, "master worker is not working", nil, nil))
 		return
 	}
-	node.Nodes.Stop(context.Background(), node.ErrNodeEndpointStopped)
+	node.Nodes.Stop(node.ErrNodeEndpointStopped)
 	r.JSON(http.StatusOK, c.NewResponseGeneric(r, 0, "success", node.Nodes.Master.IsWorking(), nil))
 }

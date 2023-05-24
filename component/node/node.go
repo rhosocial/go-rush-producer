@@ -12,9 +12,10 @@ import (
 )
 
 type Pool struct {
-	Self   PoolSelf
-	Master PoolMaster
-	Slaves PoolSlaves
+	Self    PoolSelf
+	Master  PoolMaster
+	Slaves  PoolSlaves
+	Context context.Context
 }
 
 var Nodes *Pool
@@ -95,8 +96,9 @@ func NewNodePool(self *NodeInfo.NodeInfo) *Pool {
 			Identity: IdentityNotDetermined,
 			Node:     self,
 		},
-		Master: PoolMaster{},
-		Slaves: PoolSlaves{NodesRetry: make(map[uint64]uint8)},
+		Master:  PoolMaster{},
+		Slaves:  PoolSlaves{NodesRetry: make(map[uint64]uint8)},
+		Context: context.Background(),
 	}
 	nodes.Slaves.DetectInactiveCallback = nodes.DetectSlaveNodeInactiveCallback
 	err := nodes.RefreshSelfSocket()
@@ -234,7 +236,7 @@ func (n *Pool) StartMasterWorker(ctx context.Context) {
 	ctxChild, cancel := context.WithCancelCause(ctx)
 	n.Master.WorkerCancelFunc = cancel
 	go n.Master.worker(ctxChild, WorkerMasterIntervals{
-		Base: 1000,
+		Base: 1200,
 	}, n)
 }
 

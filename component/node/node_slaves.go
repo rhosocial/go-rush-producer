@@ -198,9 +198,9 @@ func (ps *PoolSlaves) Check(id uint64, fresh *models.FreshNodeInfo) (*NodeInfo.N
 	// 检查指定ID是否存在，如果不是，则报错。
 	// slave, exist := n.Slaves[id]
 	slave := ps.Get(id)
-	//if slave == nil {
-	//	return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
-	//}
+	if slave == nil {
+		return nil, ErrNodeMasterDoesNotHaveSpecifiedSlave
+	}
 	// 再检查 FreshNodeInfo 是否相同。
 	origin := models.FreshNodeInfo{
 		Name:        slave.Name,
